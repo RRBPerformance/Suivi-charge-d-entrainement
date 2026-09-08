@@ -6,7 +6,7 @@ Created on Tue Sep  8 14:27:14 2026
 @author: romainromeyerbouchard
 """
 
-iimport streamlit as st
+import streamlit as st
 import pandas as pd
 from datetime import date
 
