@@ -10,7 +10,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 
-# Configuration de la page : Icône de balle de tennis dans l'onglet du navigateur
+# Configuration de la page
 st.set_page_config(page_title="Suivi de Charge RRB", page_icon="🎾", layout="wide")
 
 # Mot de passe sécurisé
@@ -26,8 +26,8 @@ if 'db_seances' not in st.session_state:
 if 'db_soir' not in st.session_state:
     st.session_state['db_soir'] = pd.DataFrame(columns=['Date', 'Etat_Jour', 'Zones_Douleur_Soir', 'Type_Douleur'])
 
-# Titre principal avec un peu de style
-st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Projet Raph : Suivi de la Performance</h1>", unsafe_allow_html=True)
+# Titre principal
+st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Académie Tennis : Suivi de la Performance</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #6B7280;'>Monitoring quotidien - Optimisation et Prévention</p>", unsafe_allow_html=True)
 st.divider()
 
@@ -138,27 +138,60 @@ with tab_coach:
     if saisie_mdp == MOT_DE_PASSE_COACH:
         st.success("🔓 Accès autorisé.")
         
-        # Section Forme Matin
+        # --- Section Forme Matin ---
         st.subheader("🌅 Base de données : Forme (Matin)")
-        st.dataframe(st.session_state['db_forme'], use_container_width=True)
-        csv_forme = st.session_state['db_forme'].to_csv(index=False).encode('utf-8')
-        st.download_button(label="📥 Télécharger données MATIN (CSV)", data=csv_forme, file_name='forme_matin.csv', mime='text/csv')
+        if not st.session_state['db_forme'].empty:
+            st.dataframe(st.session_state['db_forme'], use_container_width=True)
+            
+            # Poubelle Matin
+            index_a_supprimer_m = st.selectbox("Sélectionner la ligne à supprimer (Matin) :", st.session_state['db_forme'].index, key="del_m")
+            if st.button("🗑️ Supprimer cette ligne (Matin)"):
+                st.session_state['db_forme'] = st.session_state['db_forme'].drop(index_a_supprimer_m).reset_index(drop=True)
+                st.success("Ligne supprimée avec succès !")
+                st.rerun()
+                
+            csv_forme = st.session_state['db_forme'].to_csv(index=False).encode('utf-8')
+            st.download_button(label="📥 Télécharger données MATIN (CSV)", data=csv_forme, file_name='forme_matin.csv', mime='text/csv')
+        else:
+            st.write("Aucune donnée enregistrée pour le moment.")
         
         st.divider()
         
-        # Section Séances
+        # --- Section Séances ---
         st.subheader("🎾 Base de données : Séances & Charges (sRPE)")
-        st.dataframe(st.session_state['db_seances'], use_container_width=True)
-        csv_seances = st.session_state['db_seances'].to_csv(index=False).encode('utf-8')
-        st.download_button(label="📥 Télécharger données SÉANCES (CSV)", data=csv_seances, file_name='seances_charge.csv', mime='text/csv')
+        if not st.session_state['db_seances'].empty:
+            st.dataframe(st.session_state['db_seances'], use_container_width=True)
+            
+            # Poubelle Séances
+            index_a_supprimer_s = st.selectbox("Sélectionner la ligne à supprimer (Séances) :", st.session_state['db_seances'].index, key="del_s")
+            if st.button("🗑️ Supprimer cette ligne (Séances)"):
+                st.session_state['db_seances'] = st.session_state['db_seances'].drop(index_a_supprimer_s).reset_index(drop=True)
+                st.success("Séance supprimée avec succès !")
+                st.rerun()
+                
+            csv_seances = st.session_state['db_seances'].to_csv(index=False).encode('utf-8')
+            st.download_button(label="📥 Télécharger données SÉANCES (CSV)", data=csv_seances, file_name='seances_charge.csv', mime='text/csv')
+        else:
+            st.write("Aucune séance enregistrée pour le moment.")
         
         st.divider()
         
-        # Section Bilan Soir
+        # --- Section Bilan Soir ---
         st.subheader("🌙 Base de données : Flash Soir")
-        st.dataframe(st.session_state['db_soir'], use_container_width=True)
-        csv_soir = st.session_state['db_soir'].to_csv(index=False).encode('utf-8')
-        st.download_button(label="📥 Télécharger données SOIR (CSV)", data=csv_soir, file_name='flash_soir.csv', mime='text/csv')
+        if not st.session_state['db_soir'].empty:
+            st.dataframe(st.session_state['db_soir'], use_container_width=True)
+            
+            # Poubelle Soir
+            index_a_supprimer_soir = st.selectbox("Sélectionner la ligne à supprimer (Soir) :", st.session_state['db_soir'].index, key="del_soir")
+            if st.button("🗑️ Supprimer cette ligne (Soir)"):
+                st.session_state['db_soir'] = st.session_state['db_soir'].drop(index_a_supprimer_soir).reset_index(drop=True)
+                st.success("Bilan du soir supprimé avec succès !")
+                st.rerun()
+                
+            csv_soir = st.session_state['db_soir'].to_csv(index=False).encode('utf-8')
+            st.download_button(label="📥 Télécharger données SOIR (CSV)", data=csv_soir, file_name='flash_soir.csv', mime='text/csv')
+        else:
+            st.write("Aucun bilan du soir enregistré pour le moment.")
         
     elif saisie_mdp != "":
         st.error("❌ Mot de passe incorrect.")
