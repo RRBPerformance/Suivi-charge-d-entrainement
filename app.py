@@ -27,7 +27,7 @@ if 'db_soir' not in st.session_state:
     st.session_state['db_soir'] = pd.DataFrame(columns=['Date', 'Etat_Jour', 'Zones_Douleur_Soir', 'Type_Douleur'])
 
 # Titre principal avec un peu de style
-st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Académie Tennis : Suivi de la Performance</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Projet Raph : Suivi de la Performance</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #6B7280;'>Monitoring quotidien - Optimisation et Prévention</p>", unsafe_allow_html=True)
 st.divider()
 
