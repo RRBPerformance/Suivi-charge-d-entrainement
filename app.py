@@ -6,7 +6,7 @@ Created on Tue Sep  8 14:27:14 2026
 @author: romainromeyerbouchard
 """
 
-import streamlit as st
+iimport streamlit as st
 import pandas as pd
 from datetime import date
 
@@ -120,7 +120,7 @@ with tab_soir:
         st.session_state['db_soir'] = pd.concat([st.session_state['db_soir'], nouveau_soir], ignore_index=True)
         st.success("✅ Bilan du soir enregistré. Bonne récupération !")
 
-# --- ONGLET 4 : COACH AVEC GRAPHIQUES AVANCÉS & SEUILS MAX/MIN ---
+# --- ONGLET 4 : COACH AVEC SOMMES GLISSANTES ---
 with tab_coach:
     st.markdown("### 🔐 Espace Réservé au Staff")
     saisie_mdp = st.text_input("Entrez le mot de passe administrateur :", type="password")
@@ -129,7 +129,7 @@ with tab_coach:
         st.success("🔓 Accès autorisé.")
         
         st.markdown("---")
-        st.markdown("## 📈 Tableaux de Bord & Tendances de Charge")
+        st.markdown("## 📈 Tableaux de Bord & Sommes Glissantes de Charge")
         
         col_g1, col_g2 = st.columns(2)
         
@@ -142,9 +142,9 @@ with tab_coach:
                 st.info("Pas assez de données pour afficher le graphique de forme.")
                 
         with col_g2:
-            st.subheader("📊 Charges d'Entraînement & Seuils Max/Min")
+            st.subheader("📊 Somme Cumulative Glissante (Charge sRPE)")
             if not st.session_state['db_seances'].empty:
-                vue_charge = st.radio("Mode d'affichage des charges :", ["Séances par type (Empilé)", "Moyenne glissante (7j / 5j / 3j)"], horizontal=True)
+                vue_charge = st.radio("Mode d'affichage des charges :", ["Séances par type (Empilé)", "Somme cumulative (7j / 5j / 3j)"], horizontal=True)
                 
                 df_s = st.session_state['db_seances'].copy()
                 df_s['Date'] = pd.to_datetime(df_s['Date'])
@@ -153,30 +153,30 @@ with tab_coach:
                     df_pivot = df_s.pivot_table(index='Date', columns='Type', values='Charge', aggfunc='sum').fillna(0)
                     st.bar_chart(df_pivot)
                 else:
+                    # Agrégation par jour de la charge totale
                     df_jour = df_s.groupby('Date')['Charge'].sum().reset_index()
                     df_jour = df_jour.set_index('Date').sort_index()
                     
                     fenetre = st.selectbox("Sélectionner la période glissante :", ["7 jours glissants", "5 jours glissants", "3 jours glissants"])
                     jours = 7 if "7" in fenetre else (5 if "5" in fenetre else 3)
                     
-                    df_glissant = df_jour.rolling(window=f'{jours}D', min_periods=1).mean()
+                    # SOMME glissante (rolling sum) au lieu de la moyenne
+                    df_glissant = df_jour.rolling(window=f'{jours}D', min_periods=1).sum()
                     
-                    # Calcul des seuils extrêmes (Max et Min de la période glissante)
+                    # Repères Max et Min de la somme cumulative
                     val_max = df_glissant['Charge'].max()
                     val_min = df_glissant['Charge'].min()
                     
-                    # Ajout de colonnes de repères visuels fixes (traits horizontaux max et min)
-                    df_glissant['Pic Maximum (Plafond)'] = val_max
-                    df_glissant['Creux Minimum (Plancher)'] = val_min
+                    df_glissant['Somme Max (Plafond)'] = val_max
+                    df_glissant['Somme Min (Plancher)'] = val_min
                     
                     st.line_chart(df_glissant)
                     
-                    # Petit récapitulatif textuel des extrêmes pour le coach
                     col_info1, col_info2 = st.columns(2)
                     with col_info1:
-                        st.metric(label=f"🔴 Pic Max glissant ({jours}j)", value=f"{val_max:.1f} u")
+                        st.metric(label=f"🔴 Somme Max glissante ({jours}j)", value=f"{val_max:.1f} u")
                     with col_info2:
-                        st.metric(label=f"🟢 Seuil Min glissant ({jours}j)", value=f"{val_min:.1f} u")
+                        st.metric(label=f"🟢 Somme Min glissante ({jours}j)", value=f"{val_min:.1f} u")
             else:
                 st.info("Pas assez de données pour afficher les charges.")
 
