@@ -120,7 +120,7 @@ with tab_soir:
         st.session_state['db_soir'] = pd.concat([st.session_state['db_soir'], nouveau_soir], ignore_index=True)
         st.success("✅ Bilan du soir enregistré. Bonne récupération !")
 
-# --- ONGLET 4 : COACH AVEC GRAPHIQUES AVANCÉS ---
+# --- ONGLET 4 : COACH AVEC GRAPHIQUES AVANCÉS & SEUILS MAX/MIN ---
 with tab_coach:
     st.markdown("### 🔐 Espace Réservé au Staff")
     saisie_mdp = st.text_input("Entrez le mot de passe administrateur :", type="password")
@@ -142,29 +142,41 @@ with tab_coach:
                 st.info("Pas assez de données pour afficher le graphique de forme.")
                 
         with col_g2:
-            st.subheader("📊 Charges d'Entraînement & Fenêtres Glissantes")
+            st.subheader("📊 Charges d'Entraînement & Seuils Max/Min")
             if not st.session_state['db_seances'].empty:
-                # Choix de la vue pour les charges
                 vue_charge = st.radio("Mode d'affichage des charges :", ["Séances par type (Empilé)", "Moyenne glissante (7j / 5j / 3j)"], horizontal=True)
                 
                 df_s = st.session_state['db_seances'].copy()
                 df_s['Date'] = pd.to_datetime(df_s['Date'])
                 
                 if vue_charge == "Séances par type (Empilé)":
-                    # Tableau pivot pour avoir les types de séances en colonnes (empilement automatique par Streamlit)
                     df_pivot = df_s.pivot_table(index='Date', columns='Type', values='Charge', aggfunc='sum').fillna(0)
                     st.bar_chart(df_pivot)
                 else:
-                    # Calcul des moyennes glissantes sur la charge totale par jour
                     df_jour = df_s.groupby('Date')['Charge'].sum().reset_index()
                     df_jour = df_jour.set_index('Date').sort_index()
                     
-                    # Fenêtres glissantes
                     fenetre = st.selectbox("Sélectionner la période glissante :", ["7 jours glissants", "5 jours glissants", "3 jours glissants"])
                     jours = 7 if "7" in fenetre else (5 if "5" in fenetre else 3)
                     
                     df_glissant = df_jour.rolling(window=f'{jours}D', min_periods=1).mean()
+                    
+                    # Calcul des seuils extrêmes (Max et Min de la période glissante)
+                    val_max = df_glissant['Charge'].max()
+                    val_min = df_glissant['Charge'].min()
+                    
+                    # Ajout de colonnes de repères visuels fixes (traits horizontaux max et min)
+                    df_glissant['Pic Maximum (Plafond)'] = val_max
+                    df_glissant['Creux Minimum (Plancher)'] = val_min
+                    
                     st.line_chart(df_glissant)
+                    
+                    # Petit récapitulatif textuel des extrêmes pour le coach
+                    col_info1, col_info2 = st.columns(2)
+                    with col_info1:
+                        st.metric(label=f"🔴 Pic Max glissant ({jours}j)", value=f"{val_max:.1f} u")
+                    with col_info2:
+                        st.metric(label=f"🟢 Seuil Min glissant ({jours}j)", value=f"{val_min:.1f} u")
             else:
                 st.info("Pas assez de données pour afficher les charges.")
 
