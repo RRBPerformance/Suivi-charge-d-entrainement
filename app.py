@@ -20,17 +20,15 @@ MOT_DE_PASSE_COACH = "RomainRB2004!"
 
 # --- CONNEXION GOOGLE SHEETS ---
 @st.cache_resource
-init_connection():
-    # Connexion sécurisée via les secrets Streamlit
+def init_connection():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds_dict = dict(st.secrets["gcp_service_account"])
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
-    # Ouvre le Google Sheets par son nom
-    sheet = client.open("Suivi_Tennis_Database")
+    # Ouvre le Google Sheets avec son nom exact vu sur votre capture
+    sheet = client.open("RaphSuivi_Tennis_Database")
     return sheet
 
-# Fonction pour charger les données depuis Google Sheets
 def charger_donnees():
     try:
         sh = init_connection()
@@ -39,30 +37,25 @@ def charger_donnees():
         df_soir = pd.DataFrame(sh.worksheet("Soir").get_all_records())
         return df_forme, df_seances, df_soir
     except Exception as e:
-        # Si les onglets sont vides au début, on renvoie des dataframes vides bien structurés
         df_forme = pd.DataFrame(columns=['Date', 'Sommeil', 'Fatigue', 'Stress', 'Humeur', 'Score_Forme', 'Douleur_Type', 'Zones_Douleur'])
         df_seances = pd.DataFrame(columns=['Date', 'Type', 'Duree', 'RPE', 'Charge', 'Satisfaction'])
         df_soir = pd.DataFrame(columns=['Date', 'Etat_Jour', 'Zones_Douleur_Soir', 'Type_Douleur'])
         return df_forme, df_seances, df_soir
 
-# Fonction pour ajouter une ligne dans Google Sheets
 def ajouter_ligne(onglet_nom, dico_donnees):
     try:
         sh = init_connection()
         worksheet = sh.worksheet(onglet_nom)
-        # Si l'onglet est totalement vide, on ajoute les en-têtes d'abord
         if len(worksheet.get_all_values()) == 0:
             worksheet.append_row(list(dico_donnees.keys()))
         worksheet.append_row(list(dico_donnees.values()))
     except Exception as e:
-        st.error(f"Erreur lors de l'enregistrement dans Google Sheets : {e}")
+        st.error(f"Erreur d'enregistrement Google Sheets : {e}")
 
-# Fonction pour supprimer une ligne dans Google Sheets
 def supprimer_ligne_gsheets(onglet_nom, index_ligne):
     try:
         sh = init_connection()
         worksheet = sh.worksheet(onglet_nom)
-        # Les lignes dans gspread commencent à 2 (ligne 1 = en-têtes)
         worksheet.delete_rows(index_ligne + 2)
     except Exception as e:
         st.error(f"Erreur lors de la suppression : {e}")
@@ -106,7 +99,6 @@ with tab_matin:
     if st.button("✅ Valider le Check-in Matin", use_container_width=True):
         score_forme = sommeil + fatigue + stress + humeur
         zones_str = ", ".join(zones_matin) if zones_matin else "Aucune"
-        
         dico = {
             'Date': str(date_matin), 'Sommeil': sommeil, 'Fatigue': fatigue, 
             'Stress': stress, 'Humeur': humeur, 'Score_Forme': score_forme,
@@ -161,7 +153,7 @@ with tab_soir:
         ajouter_ligne("Soir", dico)
         st.success("✅ Bilan du soir enregistré dans la base de données commune !")
 
-# --- ONGLET 4 : COACH AVEC GOOGLE SHEETS ---
+# --- ONGLET 4 : COACH ---
 with tab_coach:
     st.markdown("### 🔐 Espace Réservé au Staff")
     saisie_mdp = st.text_input("Entrez le mot de passe administrateur :", type="password")
@@ -169,7 +161,6 @@ with tab_coach:
     if saisie_mdp == MOT_DE_PASSE_COACH:
         st.success("🔓 Accès autorisé.")
         
-        # Charger les données en direct depuis Google Sheets
         df_forme, df_seances, df_soir = charger_donnees()
         
         st.markdown("---")
@@ -225,7 +216,6 @@ with tab_coach:
 
         st.markdown("---")
         
-        # --- Section Tableaux & Gestion / Poubelles synchronisées ---
         st.subheader("🌅 Base de données : Forme (Matin)")
         if not df_forme.empty:
             st.dataframe(df_forme, use_container_width=True)
