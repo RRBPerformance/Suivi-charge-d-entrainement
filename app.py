@@ -12,24 +12,49 @@ from datetime import date
 
 st.set_page_config(page_title="Suivi de Charge", layout="wide")
 
-# Mot de passe sécurisé pour la vue coach
+# Mot de passe sécurisé
 MOT_DE_PASSE_COACH = "RomainRB2004!"
 
 # Initialisation des bases de données dans la session
 if 'db_forme' not in st.session_state:
-    st.session_state['db_forme'] = pd.DataFrame(columns=['Date', 'Sommeil', 'Fatigue', 'Stress', 'Humeur', 'Score_Forme', 'Douleur_Type', 'Zone_Douleur'])
+    st.session_state['db_forme'] = pd.DataFrame(columns=['Date', 'Sommeil', 'Fatigue', 'Stress', 'Humeur', 'Score_Forme', 'Douleur_Type', 'Zones_Douleur'])
     
 if 'db_seances' not in st.session_state:
     st.session_state['db_seances'] = pd.DataFrame(columns=['Date', 'Type', 'Duree', 'RPE', 'Charge', 'Satisfaction'])
 
 if 'db_soir' not in st.session_state:
-    st.session_state['db_soir'] = pd.DataFrame(columns=['Date', 'Etat_Jour', 'Localisation', 'Type_Douleur'])
+    st.session_state['db_soir'] = pd.DataFrame(columns=['Date', 'Etat_Jour', 'Zones_Douleur_Soir', 'Type_Douleur'])
 
 st.title("📊 Application de Suivi d'Entraînement & Santé")
 
 tab_matin, tab_seance, tab_soir, tab_coach = st.tabs(["🌞 Check-in Matin", "🏋️ Bilan Séance", "🌙 Bilan Soir", "🔒 Vue Coach"])
 
-# --- ONGLET 1 : MATIN (Hooper harmonisé 1 à 5) ---
+# Liste anatomique complète enrichie (avec Psoas)
+ZONES_ANATOMIQUES = [
+    "Tête / Mâchoire",
+    "Cervicales / Cou",
+    "Trapèzes",
+    "Épaules",
+    "Biceps",
+    "Triceps",
+    "Coudes",
+    "Avant-bras / Poignets / Mains",
+    "Pectoraux",
+    "Dorsaux / Grand dorsal",
+    "Lombaires / Bas du dos",
+    "Abdominaux / Obliques",
+    "Psoas / Ilio-psoas",
+    "Hanches / Adducteurs",
+    "Fessiers",
+    "Quadriceps",
+    "Ischio-jambiers",
+    "Genoux / Rotule",
+    "Mollets (Gros Jumeaux / Soléaire)",
+    "Tendons d'Achille",
+    "Chevilles / Pieds"
+]
+
+# --- ONGLET 1 : MATIN ---
 with tab_matin:
     st.header("Check-in Matinal")
     st.write("Évaluez votre état au réveil (1 = Très mauvais/bas, 5 = Excellent/haut).")
@@ -47,8 +72,8 @@ with tab_matin:
     st.markdown("---")
     st.subheader("Point Santé / Douleurs éventuelles")
     
-    zones = st.multiselect("Localisation de la douleur (si applicable) :", 
-                           ["Aucune", "Épaule / Coude", "Poignet", "Dos", "Hanches / Pubis", "Genoux", "Mollets / Chevilles"])
+    zones_matin = st.multiselect("Localisation(s) de la douleur ou gêne (plusieurs choix possibles) :", 
+                                 ZONES_ANATOMIQUES, key="zones_m")
     
     type_douleur = st.selectbox("Si douleur, de quel type s'agit-il ?", [
         "Aucune",
@@ -59,18 +84,18 @@ with tab_matin:
         "Ligamentaire (suite à une torsion)",
         "Neurologique (fourmillements, décharges)",
         "Courbatures (diffuses)",
-        "Maladie (gryppe, gastro...)",
+        "Maladie (grippe, gastro...)",
         "Crampes"
-    ])
+    ], key="type_m")
     
     if st.button("Valider le Check-in Matin"):
         score_forme = sommeil + fatigue + stress + humeur
-        zones_str = ", ".join(zones) if zones else "Aucune"
+        zones_str = ", ".join(zones_matin) if zones_matin else "Aucune"
         
         nouvelle_forme = pd.DataFrame({
             'Date': [date_matin], 'Sommeil': [sommeil], 'Fatigue': [fatigue], 
             'Stress': [stress], 'Humeur': [humeur], 'Score_Forme': [score_forme],
-            'Douleur_Type': [type_douleur], 'Zone_Douleur': [zones_str]
+            'Douleur_Type': [type_douleur], 'Zones_Douleur': [zones_str]
         })
         st.session_state['db_forme'] = pd.concat([st.session_state['db_forme'], nouvelle_forme], ignore_index=True)
         st.success(f"Check-in enregistré ! Score global de forme : {score_forme}/20")
@@ -102,7 +127,7 @@ with tab_seance:
 # --- ONGLET 3 : BILAN SOIR ---
 with tab_soir:
     st.header("Flash Santé du Soir")
-    st.write("Bilan de fin de journée sur l'impact de la journée.")
+    st.write("Bilan de fin de journée sur l'impact de l'entraînement.")
     
     date_soir = st.date_input("Date du jour", value=date.today(), key="date_soir_k")
     
@@ -113,7 +138,9 @@ with tab_soir:
         "4 - Absence complète à cause d'une blessure"
     ])
     
-    loc_soir = st.text_input("Si inconfort ou modification, où précisément ?")
+    zones_soir = st.multiselect("Localisation(s) de l'inconfort apparu ou persistant ce soir :", 
+                                 ZONES_ANATOMIQUES, key="zones_s")
+    
     type_soir = st.selectbox("Nature principale du ressenti du soir :", [
         "RAS / Normal",
         "Musculaire",
@@ -121,12 +148,13 @@ with tab_soir:
         "Tendineuse",
         "Osseuse / Ligamentaire",
         "Autre (fatigue générale / maladie)"
-    ])
+    ], key="type_s")
     
     if st.button("Envoyer le bilan du soir"):
+        zones_soir_str = ", ".join(zones_soir) if zones_soir else "Aucune"
         nouveau_soir = pd.DataFrame({
             'Date': [date_soir], 'Etat_Jour': [etat_jour], 
-            'Localisation': [loc_soir if loc_soir else "Aucune"], 'Type_Douleur': [type_soir]
+            'Zones_Douleur_Soir': [zones_soir_str], 'Type_Douleur': [type_soir]
         })
         st.session_state['db_soir'] = pd.concat([st.session_state['db_soir'], nouveau_soir], ignore_index=True)
         st.success("Bilan du soir enregistré avec succès !")
