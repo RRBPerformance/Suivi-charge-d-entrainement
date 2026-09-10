@@ -25,7 +25,6 @@ def init_connection():
     creds_dict = dict(st.secrets["gcp_service_account"])
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
-    # Ouvre le Google Sheets avec son nom exact vu sur votre capture
     sheet = client.open("RaphSuivi_Tennis_Database")
     return sheet
 
@@ -35,12 +34,20 @@ def charger_donnees():
         df_forme = pd.DataFrame(sh.worksheet("Forme").get_all_records())
         df_seances = pd.DataFrame(sh.worksheet("Seances").get_all_records())
         df_soir = pd.DataFrame(sh.worksheet("Soir").get_all_records())
-        return df_forme, df_seances, df_soir
+        
+        # Ajout du chargement de la base de Tests
+        try:
+            df_tests = pd.DataFrame(sh.worksheet("Tests").get_all_records())
+        except Exception:
+            df_tests = pd.DataFrame(columns=['Date', 'Periode', 'Test', 'Resultat', 'Unite', 'Objectif_Prochain'])
+            
+        return df_forme, df_seances, df_soir, df_tests
     except Exception as e:
         df_forme = pd.DataFrame(columns=['Date', 'Sommeil', 'Fatigue', 'Stress', 'Humeur', 'Score_Forme', 'Douleur_Type', 'Zones_Douleur'])
         df_seances = pd.DataFrame(columns=['Date', 'Type', 'Duree', 'RPE', 'Charge', 'Satisfaction'])
         df_soir = pd.DataFrame(columns=['Date', 'Etat_Jour', 'Zones_Douleur_Soir', 'Type_Douleur'])
-        return df_forme, df_seances, df_soir
+        df_tests = pd.DataFrame(columns=['Date', 'Periode', 'Test', 'Resultat', 'Unite', 'Objectif_Prochain'])
+        return df_forme, df_seances, df_soir, df_tests
 
 def ajouter_ligne(onglet_nom, dico_donnees):
     try:
@@ -161,8 +168,53 @@ with tab_coach:
     if saisie_mdp == MOT_DE_PASSE_COACH:
         st.success("🔓 Accès autorisé.")
         
-        df_forme, df_seances, df_soir = charger_donnees()
+        # On récupère désormais 4 bases de données (dont les tests)
+        df_forme, df_seances, df_soir, df_tests = charger_donnees()
         
+        # --- NOUVELLE SECTION : ÉVALUATIONS PHYSIQUES ---
+        st.markdown("---")
+        st.markdown("## 🏋️‍♂️ Suivi des Évaluations Physiques (Tests)")
+        
+        with st.expander("➕ Saisir un nouveau résultat de Test"):
+            col_t1, col_t2 = st.columns(2)
+            with col_t1:
+                date_test = st.date_input("Date du test", value=date.today(), key="d_test")
+                periode = st.selectbox("Période d'évaluation", ["Test Initial (Septembre)", "Test Intermédiaire (Hiver)", "Test Final (Printemps)"])
+                nom_test = st.selectbox("Type de Test", [
+                    "Sprint 10m / 20m", 
+                    "Détente (CMJ / SJ)", 
+                    "Profil Force-Vitesse (Sfv)", 
+                    "VMA (Luc Léger / VAM-Eval)", 
+                    "Agilité spécifique (Test en T, etc.)", 
+                    "Endurance de Force / Gainage",
+                    "Autre"
+                ])
+            with col_t2:
+                resultat = st.number_input("Résultat obtenu", format="%.2f", step=0.1)
+                unite = st.text_input("Unité (ex: sec, cm, km/h, W/kg)")
+                objectif = st.text_input("Objectif fixé pour le prochain test")
+                
+            if st.button("💾 Enregistrer le résultat du Test", use_container_width=True):
+                dico_test = {
+                    'Date': str(date_test), 'Periode': periode, 'Test': nom_test, 
+                    'Resultat': resultat, 'Unite': unite, 'Objectif_Prochain': objectif
+                }
+                ajouter_ligne("Tests", dico_test)
+                st.success("Résultat de test enregistré avec succès !")
+                st.rerun()
+
+        if not df_tests.empty:
+            st.dataframe(df_tests, use_container_width=True)
+            index_a_supprimer_t = st.selectbox("Sélectionner la ligne à supprimer (Tests) :", df_tests.index, key="del_t")
+            if st.button("🗑️ Supprimer ce test"):
+                supprimer_ligne_gsheets("Tests", index_a_supprimer_t)
+                st.success("Test supprimé du Google Sheets !")
+                st.rerun()
+            csv_tests = df_tests.to_csv(index=False).encode('utf-8')
+            st.download_button(label="📥 Télécharger la base TESTS (CSV)", data=csv_tests, file_name='tests_physiques.csv', mime='text/csv')
+        else:
+            st.info("Aucun résultat de test n'a encore été enregistré.")
+
         st.markdown("---")
         st.markdown("## 📈 Tableaux de Bord & Sommes Glissantes de Charge")
         
@@ -219,45 +271,39 @@ with tab_coach:
         st.subheader("🌅 Base de données : Forme (Matin)")
         if not df_forme.empty:
             st.dataframe(df_forme, use_container_width=True)
-            index_a_supprimer_m = st.selectbox("Sélectionner la ligne à supprimer (Matin) :", df_forme.index, key="del_m")
+            index_a_supprimer_m = st.selectbox("Sélectionner la ligne à supprimer (Matin) :", df_forme.index, key="del_m2")
             if st.button("🗑️ Supprimer cette ligne (Matin)"):
                 supprimer_ligne_gsheets("Forme", index_a_supprimer_m)
                 st.success("Ligne supprimée du Google Sheets !")
                 st.rerun()
             csv_forme = df_forme.to_csv(index=False).encode('utf-8')
             st.download_button(label="📥 Télécharger données MATIN (CSV)", data=csv_forme, file_name='forme_matin.csv', mime='text/csv')
-        else:
-            st.write("Aucune donnée enregistrée.")
         
         st.divider()
         
         st.subheader("🎾 Base de données : Séances & Charges (sRPE)")
         if not df_seances.empty:
             st.dataframe(df_seances, use_container_width=True)
-            index_a_supprimer_s = st.selectbox("Sélectionner la ligne à supprimer (Séances) :", df_seances.index, key="del_s")
+            index_a_supprimer_s = st.selectbox("Sélectionner la ligne à supprimer (Séances) :", df_seances.index, key="del_s2")
             if st.button("🗑️ Supprimer cette ligne (Séances)"):
                 supprimer_ligne_gsheets("Seances", index_a_supprimer_s)
                 st.success("Séance supprimée du Google Sheets !")
                 st.rerun()
             csv_seances = df_seances.to_csv(index=False).encode('utf-8')
             st.download_button(label="📥 Télécharger données SÉANCES (CSV)", data=csv_seances, file_name='seances_charge.csv', mime='text/csv')
-        else:
-            st.write("Aucune séance enregistrée.")
         
         st.divider()
         
         st.subheader("🌙 Base de données : Flash Soir")
         if not df_soir.empty:
             st.dataframe(df_soir, use_container_width=True)
-            index_a_supprimer_soir = st.selectbox("Sélectionner la ligne à supprimer (Soir) :", df_soir.index, key="del_soir")
+            index_a_supprimer_soir = st.selectbox("Sélectionner la ligne à supprimer (Soir) :", df_soir.index, key="del_soir2")
             if st.button("🗑️ Supprimer cette ligne (Soir)"):
                 supprimer_ligne_gsheets("Soir", index_a_supprimer_soir)
                 st.success("Bilan supprimé du Google Sheets !")
                 st.rerun()
             csv_soir = df_soir.to_csv(index=False).encode('utf-8')
             st.download_button(label="📥 Télécharger données SOIR (CSV)", data=csv_soir, file_name='flash_soir.csv', mime='text/csv')
-        else:
-            st.write("Aucun bilan du soir enregistré.")
         
     elif saisie_mdp != "":
         st.error("❌ Mot de passe incorrect.")
