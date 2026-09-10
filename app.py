@@ -35,18 +35,18 @@ def charger_donnees():
         df_seances = pd.DataFrame(sh.worksheet("Seances").get_all_records())
         df_soir = pd.DataFrame(sh.worksheet("Soir").get_all_records())
         
-        # Ajout du chargement de la base de Tests
         try:
             df_tests = pd.DataFrame(sh.worksheet("Tests").get_all_records())
         except Exception:
-            df_tests = pd.DataFrame(columns=['Date', 'Periode', 'Test', 'Resultat', 'Unite', 'Objectif_Prochain'])
+            # Ajout de la colonne 'Cote'
+            df_tests = pd.DataFrame(columns=['Date', 'Periode', 'Test', 'Cote', 'Resultat', 'Unite', 'Objectif_Prochain'])
             
         return df_forme, df_seances, df_soir, df_tests
     except Exception as e:
         df_forme = pd.DataFrame(columns=['Date', 'Sommeil', 'Fatigue', 'Stress', 'Humeur', 'Score_Forme', 'Douleur_Type', 'Zones_Douleur'])
         df_seances = pd.DataFrame(columns=['Date', 'Type', 'Duree', 'RPE', 'Charge', 'Satisfaction'])
         df_soir = pd.DataFrame(columns=['Date', 'Etat_Jour', 'Zones_Douleur_Soir', 'Type_Douleur'])
-        df_tests = pd.DataFrame(columns=['Date', 'Periode', 'Test', 'Resultat', 'Unite', 'Objectif_Prochain'])
+        df_tests = pd.DataFrame(columns=['Date', 'Periode', 'Test', 'Cote', 'Resultat', 'Unite', 'Objectif_Prochain'])
         return df_forme, df_seances, df_soir, df_tests
 
 def ajouter_ligne(onglet_nom, dico_donnees):
@@ -168,10 +168,9 @@ with tab_coach:
     if saisie_mdp == MOT_DE_PASSE_COACH:
         st.success("🔓 Accès autorisé.")
         
-        # On récupère désormais 4 bases de données (dont les tests)
         df_forme, df_seances, df_soir, df_tests = charger_donnees()
         
-        # --- NOUVELLE SECTION : ÉVALUATIONS PHYSIQUES ---
+        # --- SECTION ÉVALUATIONS PHYSIQUES ---
         st.markdown("---")
         st.markdown("## 🏋️‍♂️ Suivi des Évaluations Physiques (Tests)")
         
@@ -180,23 +179,38 @@ with tab_coach:
             with col_t1:
                 date_test = st.date_input("Date du test", value=date.today(), key="d_test")
                 periode = st.selectbox("Période d'évaluation", ["Test Initial (Septembre)", "Test Intermédiaire (Hiver)", "Test Final (Printemps)"])
+                
+                # Liste exacte de vos tests
                 nom_test = st.selectbox("Type de Test", [
-                    "Sprint 10m / 20m", 
-                    "Détente (CMJ / SJ)", 
-                    "Profil Force-Vitesse (Sfv)", 
-                    "VMA (Luc Léger / VAM-Eval)", 
-                    "Agilité spécifique (Test en T, etc.)", 
-                    "Endurance de Force / Gainage",
-                    "Autre"
+                    "VMA", 
+                    "Sprint 10m",
+                    "Suicide",
+                    "Taille", 
+                    "Taille bras levés", 
+                    "Poids",
+                    "Envergure",
+                    "Mobilité - Cheville",
+                    "Mobilité - Ischio (doigt par terre)",
+                    "Mobilité - Quadri (touche fesse)",
+                    "Mobilité - Épaule",
+                    "Mobilité - Épaule en haut",
+                    "Test cognitif",
+                    "Triple saut sur 1 pied sans élan",
+                    "Tour de 4 plots aller-retour (5m d'écart)"
                 ])
+                
+                # Nouveau champ pour le côté
+                cote = st.selectbox("Côté / Jambe (si applicable)", ["Aucun / Bilatéral", "Droite", "Gauche"])
+                
             with col_t2:
                 resultat = st.number_input("Résultat obtenu", format="%.2f", step=0.1)
-                unite = st.text_input("Unité (ex: sec, cm, km/h, W/kg)")
+                unite = st.text_input("Unité (ex: sec, cm, kg, palier)")
                 objectif = st.text_input("Objectif fixé pour le prochain test")
                 
             if st.button("💾 Enregistrer le résultat du Test", use_container_width=True):
+                # Ajout de 'Cote' dans le dictionnaire
                 dico_test = {
-                    'Date': str(date_test), 'Periode': periode, 'Test': nom_test, 
+                    'Date': str(date_test), 'Periode': periode, 'Test': nom_test, 'Cote': cote, 
                     'Resultat': resultat, 'Unite': unite, 'Objectif_Prochain': objectif
                 }
                 ajouter_ligne("Tests", dico_test)
