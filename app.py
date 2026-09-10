@@ -180,7 +180,7 @@ with tab_coach:
                 date_test = st.date_input("Date du test", value=date.today(), key="d_test")
                 periode = st.selectbox("Période d'évaluation", ["Test Initial (Septembre)", "Test Intermédiaire (Hiver)", "Test Final (Printemps)"])
                 
-                # Liste exacte de vos tests
+                # Liste exacte de vos tests mise à jour
                 nom_test = st.selectbox("Type de Test", [
                     "VMA", 
                     "Sprint 10m",
@@ -192,14 +192,13 @@ with tab_coach:
                     "Mobilité - Cheville",
                     "Mobilité - Ischio (doigt par terre)",
                     "Mobilité - Quadri (touche fesse)",
-                    "Mobilité - Épaule",
-                    "Mobilité - Épaule en haut",
+                    "Mobilité - Épaule à 90°", 
+                    "Mobilité - Épaule bras tendus",
                     "Test cognitif",
                     "Triple saut sur 1 pied sans élan",
                     "Tour de 4 plots aller-retour (5m d'écart)"
                 ])
                 
-                # Nouveau champ pour le côté
                 cote = st.selectbox("Côté / Jambe (si applicable)", ["Aucun / Bilatéral", "Droite", "Gauche"])
                 
             with col_t2:
@@ -208,7 +207,6 @@ with tab_coach:
                 objectif = st.text_input("Objectif fixé pour le prochain test")
                 
             if st.button("💾 Enregistrer le résultat du Test", use_container_width=True):
-                # Ajout de 'Cote' dans le dictionnaire
                 dico_test = {
                     'Date': str(date_test), 'Periode': periode, 'Test': nom_test, 'Cote': cote, 
                     'Resultat': resultat, 'Unite': unite, 'Objectif_Prochain': objectif
