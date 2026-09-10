@@ -244,7 +244,7 @@ with tab_coach:
         with col_g2:
             st.subheader("📊 Somme Cumulative Glissante (Charge sRPE)")
             if not df_seances.empty and 'Charge' in df_seances.columns:
-                vue_charge = st.radio("Mode d'affichage des charges :", ["Séances par type (Empilé)", "Somme cumulative (7j / 5j / 3j)"], horizontal=True)
+                vue_charge = st.radio("Mode d'affichage des charges :", ["Séances par type (Empilé)", "Somme cumulative (3j / 7j / 21j)"], horizontal=True)
                 
                 df_s = df_seances.copy()
                 df_s['Date'] = pd.to_datetime(df_s['Date'])
@@ -253,11 +253,11 @@ with tab_coach:
                     df_pivot = df_s.pivot_table(index='Date', columns='Type', values='Charge', aggfunc='sum').fillna(0)
                     st.bar_chart(df_pivot)
                 else:
+                    fenetre = st.selectbox("Sélectionner la période glissante :", ["3 jours glissants", "7 jours glissants", "21 jours glissants"])
+                    jours = 21 if "21" in fenetre else (7 if "7" in fenetre else 3)
+                    
                     df_jour = df_s.groupby('Date')['Charge'].sum().reset_index()
                     df_jour = df_jour.set_index('Date').sort_index()
-                    
-                    fenetre = st.selectbox("Sélectionner la période glissante :", ["7 jours glissants", "5 jours glissants", "3 jours glissants"])
-                    jours = 7 if "7" in fenetre else (5 if "5" in fenetre else 3)
                     
                     df_glissant = df_jour.rolling(window=f'{jours}D', min_periods=1).sum()
                     
