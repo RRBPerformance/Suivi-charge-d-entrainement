@@ -68,7 +68,7 @@ def supprimer_ligne_gsheets(onglet_nom, index_ligne):
         st.error(f"Erreur lors de la suppression : {e}")
 
 # Titre principal
-st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Académie Tennis : Suivi de la Performance</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Raph Tennis : Suivi de la Performance</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #6B7280;'>Monitoring quotidien - Optimisation et Prévention</p>", unsafe_allow_html=True)
 st.divider()
 
@@ -180,7 +180,6 @@ with tab_coach:
                 date_test = st.date_input("Date du test", value=date.today(), key="d_test")
                 periode = st.selectbox("Période d'évaluation", ["Test Initial (Septembre)", "Test Intermédiaire (Hiver)", "Test Final (Printemps)"])
                 
-                # Liste exacte de vos tests mise à jour
                 nom_test = st.selectbox("Type de Test", [
                     "VMA", 
                     "Sprint 10m",
