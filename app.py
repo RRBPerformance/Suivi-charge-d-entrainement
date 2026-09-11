@@ -11,12 +11,24 @@ import pandas as pd
 from datetime import date
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import requests
 
 # Configuration de la page
 st.set_page_config(page_title="Suivi de Charge RRB", page_icon="🎾", layout="wide")
 
 # Mot de passe sécurisé
 MOT_DE_PASSE_COACH = "RomainRB2004!"
+
+# --- FONCTION TELEGRAM ---
+def envoyer_telegram(message):
+    try:
+        token = st.secrets["TELEGRAM_TOKEN"]
+        chat_id = st.secrets["TELEGRAM_CHAT_ID"]
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {"chat_id": chat_id, "text": message}
+        requests.post(url, json=payload)
+    except Exception as e:
+        pass # Si erreur, l'application ne plante pas
 
 # --- CONNEXION GOOGLE SHEETS ---
 @st.cache_resource
@@ -38,7 +50,6 @@ def charger_donnees():
         try:
             df_tests = pd.DataFrame(sh.worksheet("Tests").get_all_records())
         except Exception:
-            # Ajout de la colonne 'Cote'
             df_tests = pd.DataFrame(columns=['Date', 'Periode', 'Test', 'Cote', 'Resultat', 'Unite', 'Objectif_Prochain'])
             
         return df_forme, df_seances, df_soir, df_tests
@@ -71,6 +82,9 @@ def supprimer_ligne_gsheets(onglet_nom, index_ligne):
 st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Raph Tennis : Suivi de la Performance</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #6B7280;'>Monitoring quotidien - Optimisation et Prévention</p>", unsafe_allow_html=True)
 st.divider()
+
+# Chargement global des données pour permettre le calcul des alertes en direct
+df_forme, df_seances, df_soir, df_tests = charger_donnees()
 
 tab_matin, tab_seance, tab_soir, tab_coach = st.tabs(["🌅 Check-in Matin", "👟 Bilan Séance", "🌙 Flash Soir", "🔐 Espace Coach"])
 
@@ -113,6 +127,30 @@ with tab_matin:
         }
         ajouter_ligne("Forme", dico)
         st.success(f"🎉 Parfait ! Ton score de forme aujourd'hui est de {score_forme}/20. Enregistré !")
+        
+        # Calcul de l'écart-type en direct pour déclencher l'alerte Telegram
+        df_f_alerte = pd.concat([df_forme, pd.DataFrame([dico])], ignore_index=True)
+        df_f_alerte['Score_Forme'] = pd.to_numeric(df_f_alerte['Score_Forme'])
+        if len(df_f_alerte) >= 3:
+            df_f_alerte['Date'] = pd.to_datetime(df_f_alerte['Date'])
+            df_f_alerte = df_f_alerte.sort_values('Date')
+            df_f_alerte['Moy_7j'] = df_f_alerte['Score_Forme'].rolling(window=7, min_periods=3).mean()
+            df_f_alerte['Std_7j'] = df_f_alerte['Score_Forme'].rolling(window=7, min_periods=3).std()
+            
+            moyenne_f = df_f_alerte['Moy_7j'].iloc[-1]
+            ecart_type_f = df_f_alerte['Std_7j'].iloc[-1]
+            
+            if pd.notna(ecart_type_f) and ecart_type_f > 0:
+                z_score_f = (score_forme - moyenne_f) / ecart_type_f
+                
+                if z_score_f <= -2:
+                    envoyer_telegram(f"🔴 ALERTE ROUGE FORME - Raph 🎾\nScore très bas ({score_forme}/20).\nChute à plus de 2 écarts-types de sa moyenne ({moyenne_f:.1f}). Fatigue centrale suspectée.")
+                elif z_score_f <= -1:
+                    envoyer_telegram(f"🟠 ALERTE ORANGE FORME - Raph 🎾\nBaisse de forme ({score_forme}/20).\nÀ plus de 1 écart-type sous sa moyenne ({moyenne_f:.1f}). Adapter l'échauffement.")
+
+        # Alerte douleur immédiate (indépendante de la moyenne)
+        if type_douleur not in ["Aucune", "Courbatures (diffuses)"]:
+            envoyer_telegram(f"🚨 ALERTE MÉDICALE MATIN - Raph 🎾\nDouleur signalée : {type_douleur}\nZone(s) : {zones_str}")
 
 # --- ONGLET 2 : SÉANCES ---
 with tab_seance:
@@ -135,6 +173,29 @@ with tab_seance:
         }
         ajouter_ligne("Seances", dico)
         st.success(f"📊 Séance validée ! Charge calculée : {charge} unités. Enregistrée !")
+        
+        # Calcul de l'écart-type en direct pour déclencher l'alerte Telegram
+        df_s_alerte = pd.concat([df_seances, pd.DataFrame([dico])], ignore_index=True)
+        df_s_alerte['Date'] = pd.to_datetime(df_s_alerte['Date'])
+        df_s_alerte['Charge'] = pd.to_numeric(df_s_alerte['Charge'])
+        
+        df_jour = df_s_alerte.groupby('Date')['Charge'].sum().reset_index().sort_values('Date')
+        
+        if len(df_jour) >= 3:
+            df_jour['Moy_21j'] = df_jour['Charge'].rolling(window=21, min_periods=3).mean()
+            df_jour['Std_21j'] = df_jour['Charge'].rolling(window=21, min_periods=3).std()
+            
+            derniere_charge = df_jour['Charge'].iloc[-1]
+            moyenne_c = df_jour['Moy_21j'].iloc[-1]
+            ecart_type_c = df_jour['Std_21j'].iloc[-1]
+            
+            if pd.notna(ecart_type_c) and ecart_type_c > 0:
+                z_score_c = (derniere_charge - moyenne_c) / ecart_type_c
+                
+                if z_score_c >= 2:
+                    envoyer_telegram(f"🔴 ALERTE ROUGE (Surcharge) - Raph 🎾\nPic critique de charge : {derniere_charge:.0f} u !\nPlus de 2 écarts-types au-dessus de la normale ({moyenne_c:.0f} u). Grand risque tissulaire.")
+                elif z_score_c >= 1:
+                    envoyer_telegram(f"🟠 ALERTE ORANGE (Surcharge) - Raph 🎾\nCharge très élevée : {derniere_charge:.0f} u.\nPlus de 1 écart-type au-dessus de la moyenne ({moyenne_c:.0f} u).")
 
 # --- ONGLET 3 : BILAN SOIR ---
 with tab_soir:
@@ -159,6 +220,9 @@ with tab_soir:
         }
         ajouter_ligne("Soir", dico)
         st.success("✅ Bilan du soir enregistré dans la base de données commune !")
+        
+        if "3" in etat_jour or "4" in etat_jour or type_soir not in ["RAS / Normal", "Musculaire"]:
+            envoyer_telegram(f"🚨 ALERTE MÉDICALE SOIR - Raph 🎾\nBilan : {etat_jour}\nDouleur : {type_soir}\nZone(s) : {zones_soir_str}")
 
 # --- ONGLET 4 : COACH ---
 with tab_coach:
@@ -168,9 +232,80 @@ with tab_coach:
     if saisie_mdp == MOT_DE_PASSE_COACH:
         st.success("🔓 Accès autorisé.")
         
-        df_forme, df_seances, df_soir, df_tests = charger_donnees()
+        # ==========================================
+        # 🚨 SYSTÈME D'ALERTES Z-SCORE (Écart-type)
+        # ==========================================
+        st.markdown("---")
+        st.markdown("## 🚨 Tableau de Bord des Alertes (Prévention des Blessures)")
         
-        # --- SECTION ÉVALUATIONS PHYSIQUES ---
+        col_alerte1, col_alerte2 = st.columns(2)
+        
+        with col_alerte1:
+            st.markdown("#### 🧠 Alerte État de Forme (7 derniers jours)")
+            if not df_forme.empty and len(df_forme) >= 3:
+                df_f = df_forme.copy()
+                df_f['Date'] = pd.to_datetime(df_f['Date'])
+                df_f = df_f.sort_values('Date')
+                
+                df_f['Moy_7j'] = df_f['Score_Forme'].rolling(window=7, min_periods=3).mean()
+                df_f['Std_7j'] = df_f['Score_Forme'].rolling(window=7, min_periods=3).std()
+                
+                dernier_score = df_f['Score_Forme'].iloc[-1]
+                moyenne_f = df_f['Moy_7j'].iloc[-1]
+                ecart_type_f = df_f['Std_7j'].iloc[-1]
+                
+                if pd.notna(ecart_type_f) and ecart_type_f > 0:
+                    z_score_f = (dernier_score - moyenne_f) / ecart_type_f
+                    
+                    if z_score_f <= -2:
+                        st.error(f"🔴 **ALERTE ROUGE** : Score très bas ({dernier_score}/20). Chute critique à plus de 2 écarts-types de la moyenne ({moyenne_f:.1f}). Fatigue centrale suspectée.")
+                    elif z_score_f <= -1:
+                        st.warning(f"🟠 **ALERTE ORANGE** : Baisse de forme ({dernier_score}/20). À plus de 1 écart-type sous la moyenne ({moyenne_f:.1f}). Adapter l'échauffement.")
+                    elif z_score_f >= 1:
+                        st.success(f"🟢 **EXCELLENT** : Forme optimale ({dernier_score}/20). Supérieure à la moyenne récente.")
+                    else:
+                        st.info(f"✅ Forme stable et dans la norme (Moyenne : {moyenne_f:.1f}).")
+                else:
+                    st.info("Calcul en cours, attente de variations des scores...")
+            else:
+                st.info("Pas assez de données pour l'analyse de forme (minimum 3 jours nécessaires).")
+                
+        with col_alerte2:
+            st.markdown("#### ⚡ Alerte Charge sRPE (21 derniers jours)")
+            if not df_seances.empty and len(df_seances) >= 3:
+                df_s = df_seances.copy()
+                df_s['Date'] = pd.to_datetime(df_s['Date'])
+                
+                df_jour = df_s.groupby('Date')['Charge'].sum().reset_index()
+                df_jour = df_jour.sort_values('Date')
+                
+                df_jour['Moy_21j'] = df_jour['Charge'].rolling(window=21, min_periods=3).mean()
+                df_jour['Std_21j'] = df_jour['Charge'].rolling(window=21, min_periods=3).std()
+                
+                derniere_charge = df_jour['Charge'].iloc[-1]
+                moyenne_c = df_jour['Moy_21j'].iloc[-1]
+                ecart_type_c = df_jour['Std_21j'].iloc[-1]
+                
+                if pd.notna(ecart_type_c) and ecart_type_c > 0:
+                    z_score_c = (derniere_charge - moyenne_c) / ecart_type_c
+                    
+                    if z_score_c >= 2:
+                        st.error(f"🔴 **ALERTE ROUGE (Surcharge)** : Pic critique ({derniere_charge:.0f} u) ! Plus de 2 écarts-types au-dessus de la normale ({moyenne_c:.0f} u). Grand risque de blessure tissulaire.")
+                    elif z_score_c >= 1:
+                        st.warning(f"🟠 **ALERTE ORANGE (Surcharge)** : Charge élevée ({derniere_charge:.0f} u). Plus de 1 écart-type au-dessus de la moyenne. Surveiller la récupération.")
+                    elif z_score_c <= -2:
+                        st.error(f"🔴 **ALERTE ROUGE (Sous-charge)** : Baisse critique de charge ({derniere_charge:.0f} u). Plus de 2 écarts-types sous la moyenne. Risque de désentraînement si prolongé.")
+                    elif z_score_c <= -1:
+                        st.warning(f"🟠 **ALERTE ORANGE (Sous-charge)** : Charge très faible ({derniere_charge:.0f} u). Phase d'affûtage ou anomalie ?")
+                    else:
+                        st.info(f"✅ Charge quotidienne dans les standards habituels (Moyenne : {moyenne_c:.0f} u).")
+                else:
+                    st.info("Calcul en cours, attente de variations des charges...")
+            else:
+                st.info("Pas assez de données pour l'analyse de charge (minimum 3 jours nécessaires).")
+                
+        # ==========================================
+
         st.markdown("---")
         st.markdown("## 🏋️‍♂️ Suivi des Évaluations Physiques (Tests)")
         
@@ -181,23 +316,11 @@ with tab_coach:
                 periode = st.selectbox("Période d'évaluation", ["Test Initial (Septembre)", "Test Intermédiaire (Hiver)", "Test Final (Printemps)"])
                 
                 nom_test = st.selectbox("Type de Test", [
-                    "VMA", 
-                    "Sprint 10m",
-                    "Suicide",
-                    "Taille", 
-                    "Taille bras levés", 
-                    "Poids",
-                    "Envergure",
-                    "Mobilité - Cheville",
-                    "Mobilité - Ischio (doigt par terre)",
-                    "Mobilité - Quadri (touche fesse)",
-                    "Mobilité - Épaule à 90°", 
-                    "Mobilité - Épaule bras tendus",
-                    "Test cognitif",
-                    "Triple saut sur 1 pied sans élan",
-                    "Tour de 4 plots aller-retour (5m d'écart)"
+                    "VMA", "Sprint 10m", "Suicide", "Taille", "Taille bras levés", "Poids", "Envergure",
+                    "Mobilité - Cheville", "Mobilité - Ischio (doigt par terre)", "Mobilité - Quadri (touche fesse)",
+                    "Mobilité - Épaule à 90°", "Mobilité - Épaule bras tendus", "Test cognitif",
+                    "Triple saut sur 1 pied sans élan", "Tour de 4 plots aller-retour (5m d'écart)"
                 ])
-                
                 cote = st.selectbox("Côté / Jambe (si applicable)", ["Aucun / Bilatéral", "Droite", "Gauche"])
                 
             with col_t2:
@@ -287,8 +410,6 @@ with tab_coach:
                 supprimer_ligne_gsheets("Forme", index_a_supprimer_m)
                 st.success("Ligne supprimée du Google Sheets !")
                 st.rerun()
-            csv_forme = df_forme.to_csv(index=False).encode('utf-8')
-            st.download_button(label="📥 Télécharger données MATIN (CSV)", data=csv_forme, file_name='forme_matin.csv', mime='text/csv')
         
         st.divider()
         
@@ -300,8 +421,6 @@ with tab_coach:
                 supprimer_ligne_gsheets("Seances", index_a_supprimer_s)
                 st.success("Séance supprimée du Google Sheets !")
                 st.rerun()
-            csv_seances = df_seances.to_csv(index=False).encode('utf-8')
-            st.download_button(label="📥 Télécharger données SÉANCES (CSV)", data=csv_seances, file_name='seances_charge.csv', mime='text/csv')
         
         st.divider()
         
@@ -313,8 +432,6 @@ with tab_coach:
                 supprimer_ligne_gsheets("Soir", index_a_supprimer_soir)
                 st.success("Bilan supprimé du Google Sheets !")
                 st.rerun()
-            csv_soir = df_soir.to_csv(index=False).encode('utf-8')
-            st.download_button(label="📥 Télécharger données SOIR (CSV)", data=csv_soir, file_name='flash_soir.csv', mime='text/csv')
         
     elif saisie_mdp != "":
         st.error("❌ Mot de passe incorrect.")
