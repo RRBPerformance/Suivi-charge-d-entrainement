@@ -88,7 +88,7 @@ st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Raph Tennis : 
 st.markdown("<p style='text-align: center; color: #6B7280;'>Monitoring quotidien - Optimisation et Prévention</p>", unsafe_allow_html=True)
 st.divider()
 
-# Chargement global des données pour permettre le calcul des alertes en direct
+# Chargement global des données
 df_forme, df_seances, df_soir, df_tests = charger_donnees()
 
 tab_matin, tab_seance, tab_soir, tab_coach = st.tabs(["🌅 Check-in Matin", "👟 Bilan Séance", "🌙 Flash Soir", "🔐 Espace Coach"])
@@ -133,7 +133,6 @@ with tab_matin:
         ajouter_ligne("Forme", dico)
         st.success(f"🎉 Parfait ! Ton score de forme aujourd'hui est de {score_forme}/20. Enregistré !")
         
-        # Calcul de l'écart-type en direct pour déclencher l'alerte Telegram
         df_f_alerte = pd.concat([df_forme, pd.DataFrame([dico])], ignore_index=True)
         df_f_alerte['Score_Forme'] = pd.to_numeric(df_f_alerte['Score_Forme'])
         if len(df_f_alerte) >= 3:
@@ -153,7 +152,6 @@ with tab_matin:
                 elif z_score_f <= -1:
                     envoyer_telegram(f"🟠 ALERTE ORANGE FORME - Raph 🎾\nBaisse de forme ({score_forme}/20).\nÀ plus de 1 écart-type sous sa moyenne ({moyenne_f:.1f}). Adapter l'échauffement.")
 
-        # Alerte douleur immédiate (indépendante de la moyenne)
         if type_douleur not in ["Aucune", "Courbatures (diffuses)"]:
             envoyer_telegram(f"🚨 ALERTE MÉDICALE MATIN - Raph 🎾\nDouleur signalée : {type_douleur}\nZone(s) : {zones_str}")
 
@@ -179,7 +177,6 @@ with tab_seance:
         ajouter_ligne("Seances", dico)
         st.success(f"📊 Séance validée ! Charge calculée : {charge} unités. Enregistrée !")
         
-        # Calcul de l'écart-type en direct pour déclencher l'alerte Telegram
         df_s_alerte = pd.concat([df_seances, pd.DataFrame([dico])], ignore_index=True)
         df_s_alerte['Date'] = pd.to_datetime(df_s_alerte['Date'])
         df_s_alerte['Charge'] = pd.to_numeric(df_s_alerte['Charge'])
@@ -365,6 +362,10 @@ with tab_coach:
                 df_f_chart = df_forme.copy()
                 df_f_chart['Date'] = pd.to_datetime(df_f_chart['Date'])
                 df_f_chart = df_f_chart.set_index('Date')[['Score_Forme']]
+                
+                # NOUVEAUTÉ : Formatage strict de l'index en date pour supprimer l'axe des heures
+                df_f_chart.index = df_f_chart.index.date
+                
                 st.line_chart(df_f_chart)
             else:
                 st.info("Pas assez de données pour afficher le graphique de forme.")
@@ -379,6 +380,10 @@ with tab_coach:
                 
                 if vue_charge == "Séances par type (Empilé)":
                     df_pivot = df_s.pivot_table(index='Date', columns='Type', values='Charge', aggfunc='sum').fillna(0)
+                    
+                    # NOUVEAUTÉ : Formatage strict de l'index en date pour supprimer l'axe des heures
+                    df_pivot.index = df_pivot.index.date
+                    
                     st.bar_chart(df_pivot)
                 else:
                     fenetre = st.selectbox("Sélectionner la période glissante :", ["3 jours glissants", "7 jours glissants", "21 jours glissants"])
@@ -394,6 +399,9 @@ with tab_coach:
                     
                     df_glissant['Somme Max (Plafond)'] = val_max
                     df_glissant['Somme Min (Plancher)'] = val_min
+                    
+                    # NOUVEAUTÉ : Formatage strict de l'index en date pour supprimer l'axe des heures
+                    df_glissant.index = df_glissant.index.date
                     
                     st.line_chart(df_glissant)
                     
