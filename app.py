@@ -25,10 +25,15 @@ def envoyer_telegram(message):
         token = st.secrets["TELEGRAM_TOKEN"]
         chat_id = st.secrets["TELEGRAM_CHAT_ID"]
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": message}
-        requests.post(url, json=payload)
+        payload = {"chat_id": str(chat_id), "text": message}
+        reponse = requests.post(url, json=payload)
+        
+        # Si Telegram refuse le message, on affiche l'erreur en rouge sur Streamlit
+        if reponse.status_code != 200:
+            st.error(f"❌ Telegram a bloqué l'envoi. Raison : {reponse.text}")
+            
     except Exception as e:
-        pass # Si erreur, l'application ne plante pas
+        st.error(f"❌ Erreur de configuration Telegram : {e}")
 
 # --- CONNEXION GOOGLE SHEETS ---
 @st.cache_resource
