@@ -28,10 +28,8 @@ def envoyer_telegram(message):
         payload = {"chat_id": str(chat_id), "text": message}
         reponse = requests.post(url, json=payload)
         
-        # Si Telegram refuse le message, on affiche l'erreur en rouge sur Streamlit
         if reponse.status_code != 200:
             st.error(f"❌ Telegram a bloqué l'envoi. Raison : {reponse.text}")
-            
     except Exception as e:
         st.error(f"❌ Erreur de configuration Telegram : {e}")
 
@@ -45,6 +43,8 @@ def init_connection():
     sheet = client.open("RaphSuivi_Tennis_Database")
     return sheet
 
+# OPTIMISATION : Mise en cache des données pour éviter de saturer l'API Google
+@st.cache_data(ttl=600)
 def charger_donnees():
     try:
         sh = init_connection()
@@ -69,9 +69,10 @@ def ajouter_ligne(onglet_nom, dico_donnees):
     try:
         sh = init_connection()
         worksheet = sh.worksheet(onglet_nom)
-        if len(worksheet.get_all_values()) == 0:
-            worksheet.append_row(list(dico_donnees.keys()))
+        # On écrit directement sans faire de requête de lecture préalable
         worksheet.append_row(list(dico_donnees.values()))
+        # On vide la mémoire cache pour que les graphiques se mettent à jour
+        st.cache_data.clear()
     except Exception as e:
         st.error(f"Erreur d'enregistrement Google Sheets : {e}")
 
@@ -80,6 +81,8 @@ def supprimer_ligne_gsheets(onglet_nom, index_ligne):
         sh = init_connection()
         worksheet = sh.worksheet(onglet_nom)
         worksheet.delete_rows(index_ligne + 2)
+        # On vide la mémoire cache pour actualiser la page
+        st.cache_data.clear()
     except Exception as e:
         st.error(f"Erreur lors de la suppression : {e}")
 
@@ -88,7 +91,7 @@ st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Raph Tennis : 
 st.markdown("<p style='text-align: center; color: #6B7280;'>Monitoring quotidien - Optimisation et Prévention</p>", unsafe_allow_html=True)
 st.divider()
 
-# Chargement global des données
+# Chargement global des données (désormais protégé par le cache)
 df_forme, df_seances, df_soir, df_tests = charger_donnees()
 
 tab_matin, tab_seance, tab_soir, tab_coach = st.tabs(["🌅 Check-in Matin", "👟 Bilan Séance", "🌙 Flash Soir", "🔐 Espace Coach"])
@@ -363,8 +366,7 @@ with tab_coach:
                 df_f_chart['Date'] = pd.to_datetime(df_f_chart['Date'])
                 df_f_chart = df_f_chart.set_index('Date')[['Score_Forme']]
                 
-                # NOUVEAUTÉ : Formatage strict de l'index en date pour supprimer l'axe des heures
-                df_f_chart.index = df_f_chart.index.date
+                df_f_chart.index = df_f_chart.index.strftime('%Y-%m-%d')
                 
                 st.line_chart(df_f_chart)
             else:
@@ -380,10 +382,7 @@ with tab_coach:
                 
                 if vue_charge == "Séances par type (Empilé)":
                     df_pivot = df_s.pivot_table(index='Date', columns='Type', values='Charge', aggfunc='sum').fillna(0)
-                    
-                    # NOUVEAUTÉ : Formatage strict de l'index en date pour supprimer l'axe des heures
-                    df_pivot.index = df_pivot.index.date
-                    
+                    df_pivot.index = df_pivot.index.strftime('%Y-%m-%d')
                     st.bar_chart(df_pivot)
                 else:
                     fenetre = st.selectbox("Sélectionner la période glissante :", ["3 jours glissants", "7 jours glissants", "21 jours glissants"])
@@ -400,8 +399,7 @@ with tab_coach:
                     df_glissant['Somme Max (Plafond)'] = val_max
                     df_glissant['Somme Min (Plancher)'] = val_min
                     
-                    # NOUVEAUTÉ : Formatage strict de l'index en date pour supprimer l'axe des heures
-                    df_glissant.index = df_glissant.index.date
+                    df_glissant.index = df_glissant.index.strftime('%Y-%m-%d')
                     
                     st.line_chart(df_glissant)
                     
