@@ -418,7 +418,7 @@ if not df_tests.empty:
                 st.rerun()
             csv_tests = df_tests.to_csv(index=False).encode('utf-8')
             st.download_button(label="📥 Télécharger la base TESTS (CSV)", data=csv_tests, file_name='tests_physiques.csv', mime='text/csv')
-        else:
+else:
             st.info("Aucun résultat de test n'a encore été enregistré.")
 
         st.markdown("---")
