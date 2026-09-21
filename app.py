@@ -381,9 +381,9 @@ with tab_coach:
 st.markdown("---")
 st.markdown("## 🏋️‍♂️ Suivi des Évaluations Physiques (Tests)")
         
-        with st.expander("➕ Saisir un nouveau résultat de Test"):
+with st.expander("➕ Saisir un nouveau résultat de Test"):
             col_t1, col_t2 = st.columns(2)
-            with col_t1:
+with col_t1:
                 date_test = st.date_input("Date du test", value=date.today(), key="d_test")
                 periode = st.selectbox("Période d'évaluation", ["Test Initial (Septembre)", "Test Intermédiaire (Hiver)", "Test Final (Printemps)"])
                 
