@@ -200,70 +200,97 @@ with tab_seance:
     st.info("⏱️ **Rappel :** À remplir dans les 30 minutes suivant la fin de l'effort.")
     
     st.markdown("### 📡 1. Données de la Montre (Objectif)")
-    # Bouton pour déclencher l'API WHOOP
-    if st.button("🔄 Synchroniser ma dernière séance WHOOP", type="primary", use_container_width=True):
-        # NOTE : Ici, on mettra la vraie requête API WHOOP. 
-        # Pour tester l'interface aujourd'hui, on simule l'arrivée des données de la montre :
-        st.session_state['whoop_strain'] = 12.5  # Exemple de Strain sur 21
-        st.session_state['whoop_duree'] = 90     # Durée en minutes
-        st.session_state['whoop_type'] = "Tennis"
-        st.success("✅ Données WHOOP importées avec succès !")
+    
+    # Deux boutons côte à côte
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        if st.button("🔄 Synchroniser ma montre", type="primary", use_container_width=True):
+            st.session_state['whoop_synced'] = True
+            st.session_state['sans_montre'] = False
+            # Simulation des données WHOOP
+            st.session_state['whoop_strain'] = 12.5  
+            st.session_state['whoop_duree'] = 90     
+            st.session_state['whoop_type'] = "Tennis"
+            st.success("✅ Données WHOOP importées avec succès !")
+            
+    with col_btn2:
+        if st.button("🤷‍♂️ Je n'ai pas ma montre", use_container_width=True):
+            st.session_state['sans_montre'] = True
+            st.session_state['whoop_synced'] = False
 
-    # Si les données WHOOP sont chargées, on affiche la suite
-    if 'whoop_strain' in st.session_state:
-        col_w1, col_w2, col_w3 = st.columns(3)
-        with col_w1:
-            st.metric("Activité détectée", st.session_state['whoop_type'])
-        with col_w2:
-            st.metric("Durée (min)", st.session_state['whoop_duree'])
-        with col_w3:
-            st.metric("Score d'Effort (Strain)", f"{st.session_state['whoop_strain']} / 21")
-
+    # Si l'un des deux boutons a été cliqué, on affiche la suite
+    if st.session_state.get('whoop_synced') or st.session_state.get('sans_montre'):
         st.markdown("---")
         st.markdown("### 🧠 2. Ton Ressenti (Subjectif)")
         
         date_seance = st.date_input("📅 Date de la séance", value=date.today(), key="date_s")
         
+        # --- MODE SANS MONTRE ---
+        if st.session_state.get('sans_montre'):
+            st.warning("⚠️ Mode manuel activé : Tu dois renseigner le type et la durée toi-même.")
+            col_m1, col_m2 = st.columns(2)
+            with col_m1:
+                type_final = st.selectbox("Type de séance", ["Prépa Physique", "Tennis", "Récupération", "Match"])
+            with col_m2:
+                duree_finale = st.number_input("Durée (minutes)", min_value=1, value=60)
+            strain_final = None # Pas de score WHOOP
+            
+        # --- MODE AVEC MONTRE ---
+        else:
+            col_w1, col_w2, col_w3 = st.columns(3)
+            with col_w1:
+                st.metric("Activité", st.session_state['whoop_type'])
+            with col_w2:
+                st.metric("Durée (min)", st.session_state['whoop_duree'])
+            with col_w3:
+                st.metric("Score d'Effort", f"{st.session_state['whoop_strain']} / 21")
+                
+            type_final = st.session_state['whoop_type']
+            duree_finale = st.session_state['whoop_duree']
+            strain_final = st.session_state['whoop_strain']
+
+        # --- SUITE COMMUNE (RPE) ---
         col3, col4 = st.columns(2)
         with col3:
             rpe = st.slider("🥵 Difficulté ressentie (RPE 1-10)", 1, 10, 5)
         with col4:
             satisfaction = st.slider("🎯 Satisfaction (1-5)", 1, 5, 3)
             
-        # Zone d'analyse en direct pour le joueur/coach
         st.markdown("#### ⚡ Analyse de la charge")
-        charge = st.session_state['whoop_duree'] * rpe
+        charge = duree_finale * rpe
         
-        # Logique d'alerte sur le décalage (simplifiée)
-        # On met le Strain sur une échelle de 10 pour le comparer au RPE
-        strain_sur_10 = (st.session_state['whoop_strain'] / 21) * 10
-        ecart = rpe - strain_sur_10
-        
-        if ecart >= 3:
-            st.warning("⚠️ **Alerte Fatigue Nerveuse :** Tu as ressenti cette séance comme très dure par rapport à ce que ton cœur a subi. Signe possible d'une fatigue neuromusculaire ou d'un stress important.")
-        elif ecart <= -3:
-            st.warning("⚠️ **Alerte Surcharge :** La séance t'a paru facile, mais ton organisme a pris un gros impact cardio (Strain élevé). Attention à bien récupérer demain !")
+        # L'analyse croisée n'est possible que s'il a sa montre
+        if st.session_state.get('whoop_synced'):
+            strain_sur_10 = (strain_final / 21) * 10
+            ecart = rpe - strain_sur_10
+            
+            if ecart >= 3:
+                st.warning("⚠️ **Alerte Fatigue Nerveuse :** Tu as ressenti cette séance comme très dure par rapport à l'impact cardio. Signe possible d'une fatigue neuromusculaire.")
+            elif ecart <= -3:
+                st.warning("⚠️ **Alerte Surcharge :** La séance t'a paru facile, mais ton organisme a pris un gros impact cardio (Strain élevé).")
+            else:
+                st.success("✅ **Cohérence parfaite :** Ton ressenti correspond à la dépense mesurée.")
         else:
-            st.success("✅ **Cohérence parfaite :** Ton ressenti correspond exactement à la dépense mesurée par la montre.")
+            st.info("💡 L'analyse croisée avec ton rythme cardiaque n'est pas disponible sans la montre.")
 
-        if st.button("🔥 Enregistrer la séance dans la base", use_container_width=True):
+        if st.button("🔥 Enregistrer la séance", use_container_width=True):
             nouvelle_seance = pd.DataFrame({
                 'Date': [date_seance], 
-                'Type': [st.session_state['whoop_type']], 
-                'Duree': [st.session_state['whoop_duree']], 
+                'Type': [type_final], 
+                'Duree': [duree_finale], 
                 'RPE': [rpe], 
-                'Strain_WHOOP': [st.session_state['whoop_strain']],
+                'Strain_WHOOP': [strain_final],
                 'Charge_sRPE': [charge], 
                 'Satisfaction': [satisfaction]
             })
             st.session_state['db_seances'] = pd.concat([st.session_state['db_seances'], nouvelle_seance], ignore_index=True)
-            st.success(f"📊 Séance validée ! Charge sRPE calculée : {charge} unités.")
+            st.success(f"📊 Séance validée ! Charge : {charge}.")
             
-            # On nettoie les données temporaires pour la prochaine séance
-            del st.session_state['whoop_strain']
-            del st.session_state['whoop_duree']
-            del st.session_state['whoop_type']
+            # Réinitialisation pour la prochaine séance
+            st.session_state.pop('whoop_synced', None)
+            st.session_state.pop('sans_montre', None)
             st.rerun()
+    
 # --- ONGLET 3 : BILAN SOIR ---
 with tab_soir:
     st.info("🌙 **Flash Soir :** Dernier bilan avant la récupération nocturne.")
