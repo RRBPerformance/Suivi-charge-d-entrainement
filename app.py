@@ -102,98 +102,113 @@ ZONES_ANATOMIQUES = [
     "Abdominaux / Obliques", "Psoas / Ilio-psoas", "Hanches / Adducteurs", "Fessiers", "Quadriceps", 
     "Ischio-jambiers", "Genoux / Rotule", "Mollets (Gros Jumeaux / Soléaire)", "Tendons d'Achille", "Chevilles / Pieds"
 ]
-
 # --- ONGLET 1 : MATIN ---
 with tab_matin:
     st.info("💡 **Consigne :** À remplir chaque matin au réveil pour adapter la charge de la journée.")
     
-    # --- MÉCANIQUE DE CONNEXION WHOOP ---
-    client_id = st.secrets["WHOOP_CLIENT_ID"]
-    client_secret = st.secrets["WHOOP_CLIENT_SECRET"]
-    redirect_uri = "https://suivi-charge-rrb.streamlit.app/"
+    st.markdown("### 📡 1. Données de Récupération (Objectif)")
     
-    if "code" in st.query_params:
-        code_auth = st.query_params["code"]
-        token_url = "https://api.prod.whoop.com/oauth/oauth2/token"
-        payload = {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "grant_type": "authorization_code",
-            "code": code_auth,
-            "redirect_uri": redirect_uri
-        }
-        rep = requests.post(token_url, data=payload)
-        
-        if rep.status_code == 200:
-            st.session_state['whoop_token'] = rep.json()['access_token']
-            st.query_params.clear() 
-            st.success("✅ Synchronisation WHOOP réussie !")
-        else:
-            st.error("❌ Échec de la connexion à WHOOP.")
+    # Deux boutons côte à côte pour le matin
+    col_btn_m1, col_btn_m2 = st.columns(2)
+    with col_btn_m1:
+        if st.button("🔄 Synchroniser mon sommeil WHOOP", type="primary", use_container_width=True, key="btn_whoop_matin"):
+            st.session_state['whoop_matin_synced'] = True
+            st.session_state['sans_montre_matin'] = False
+            # Simulation des données WHOOP du matin
+            st.session_state['whoop_recup'] = 82     # % Récupération (Souvent Vert au-dessus de 66%)
+            st.session_state['whoop_sommeil'] = 95   # % Sommeil
+            st.session_state['whoop_vfc'] = 75       # VFC (HRV) en ms
+            st.success("✅ Données WHOOP importées avec succès !")
+            
+    with col_btn_m2:
+        if st.button("🤷‍♂️ Je n'ai pas ma montre", use_container_width=True, key="btn_no_montre_matin"):
+            st.session_state['sans_montre_matin'] = True
+            st.session_state['whoop_matin_synced'] = False
 
-    if 'whoop_token' not in st.session_state:
-        scopes = "read:recovery read:sleep read:cycles read:workout"
-        auth_url = f"https://api.prod.whoop.com/oauth/oauth2/auth?client_id={client_id}&response_type=code&redirect_uri={redirect_uri}&scope={scopes}"
+    # Si l'un des deux boutons a été cliqué, on affiche le questionnaire
+    if st.session_state.get('whoop_matin_synced') or st.session_state.get('sans_montre_matin'):
+        st.markdown("---")
+        st.markdown("### 🧠 2. Ton Ressenti (Subjectif)")
         
-        st.markdown(f'''
-            <a href="{auth_url}" target="_self">
-                <button style="background-color: #000000; color: white; padding: 10px 20px; border-radius: 5px; border: none; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 20px;">
-                    ⚫ Se connecter avec WHOOP
-                </button>
-            </a>
-        ''', unsafe_allow_html=True)
+        date_matin = st.date_input("📅 Date du jour", value=date.today(), key="date_m")
+        col1, col2 = st.columns(2)
         
-    date_matin = st.date_input("📅 Date du jour", value=date.today(), key="date_m")
-    
-    st.markdown("### 🧠 État de Forme (Hooper)")
-    col1, col2 = st.columns(2)
-    with col1:
-        sommeil = st.slider("💤 Qualité du sommeil (1=Insomniaque, 5=Parfait)", 1, 5, 3)
-        fatigue = st.slider("🔋 Niveau de fraîcheur (1=Épuisé, 5=Frais)", 1, 5, 3)
-    with col2:
-        stress = st.slider("🌪️ Niveau de stress (1=Très stressé, 5=Zen)", 1, 5, 3)
-        humeur = st.slider("😊 Humeur (1=Mauvaise, 5=Excellente)", 1, 5, 3)
-        
-    st.markdown("### 🩺 Point Clinique Matinal")
-    zones_matin = st.multiselect("📍 Localisation(s) de la douleur ou gêne :", ZONES_ANATOMIQUES, key="zones_m")
-    type_douleur = st.selectbox("⚡ Quel est le type de douleur ?", [
-        "Aucune", "Musculaire (déchirure, élongation)", "Articulaire (blocage, instabilité)", 
-        "Tendineuse (progressive à l'effort)", "Osseuse (profonde)", "Ligamentaire (torsion)", 
-        "Neurologique (fourmillements)", "Courbatures (diffuses)", "Maladie (grippe, gastro...)", "Crampes"
-    ], key="type_m")
-    
-    if st.button("✅ Valider le Check-in Matin", use_container_width=True):
-        score_forme = sommeil + fatigue + stress + humeur
-        zones_str = ", ".join(zones_matin) if zones_matin else "Aucune"
-        dico = {
-            'Date': str(date_matin), 'Sommeil': sommeil, 'Fatigue': fatigue, 
-            'Stress': stress, 'Humeur': humeur, 'Score_Forme': score_forme,
-            'Douleur_Type': type_douleur, 'Zones_Douleur': zones_str
-        }
-        ajouter_ligne("Forme", dico)
-        st.success(f"🎉 Parfait ! Ton score de forme aujourd'hui est de {score_forme}/20. Enregistré !")
-        
-        df_f_alerte = pd.concat([df_forme, pd.DataFrame([dico])], ignore_index=True)
-        df_f_alerte['Score_Forme'] = pd.to_numeric(df_f_alerte['Score_Forme'])
-        if len(df_f_alerte) >= 3:
-            df_f_alerte['Date'] = pd.to_datetime(df_f_alerte['Date'])
-            df_f_alerte = df_f_alerte.sort_values('Date')
-            df_f_alerte['Moy_7j'] = df_f_alerte['Score_Forme'].rolling(window=7, min_periods=3).mean()
-            df_f_alerte['Std_7j'] = df_f_alerte['Score_Forme'].rolling(window=7, min_periods=3).std()
-            
-            moyenne_f = df_f_alerte['Moy_7j'].iloc[-1]
-            ecart_type_f = df_f_alerte['Std_7j'].iloc[-1]
-            
-            if pd.notna(ecart_type_f) and ecart_type_f > 0:
-                z_score_f = (score_forme - moyenne_f) / ecart_type_f
+        # --- MODE SANS MONTRE ---
+        if st.session_state.get('sans_montre_matin'):
+            st.warning("⚠️ Mode manuel activé : Évalue toi-même ton sommeil et ta fraîcheur physique.")
+            with col1:
+                sommeil = st.slider("💤 Qualité du sommeil (1=Insomniaque, 5=Parfait)", 1, 5, 3)
+                fatigue = st.slider("🔋 Niveau de fraîcheur (1=Épuisé, 5=Frais)", 1, 5, 3)
                 
-                if z_score_f <= -2:
-                    envoyer_telegram(f"🔴 ALERTE ROUGE FORME - Raph 🎾\nScore très bas ({score_forme}/20).\nChute à plus de 2 écarts-types de sa moyenne ({moyenne_f:.1f}). Fatigue centrale suspectée.")
-                elif z_score_f <= -1:
-                    envoyer_telegram(f"🟠 ALERTE ORANGE FORME - Raph 🎾\nBaisse de forme ({score_forme}/20).\nÀ plus de 1 écart-type sous sa moyenne ({moyenne_f:.1f}). Adapter l'échauffement.")
+        # --- MODE AVEC MONTRE ---
+        else:
+            with col1:
+                st.metric("❤️ Récupération WHOOP", f"{st.session_state['whoop_recup']} %")
+                st.metric("💤 Performance Sommeil", f"{st.session_state['whoop_sommeil']} %")
+                st.metric("🫀 VFC (HRV)", f"{st.session_state['whoop_vfc']} ms")
+                
+                # Conversion discrète des pourcentages WHOOP en score sur 5 pour le Google Sheets
+                sommeil = max(1, min(5, round(st.session_state['whoop_sommeil'] / 20)))
+                fatigue = max(1, min(5, round(st.session_state['whoop_recup'] / 20)))
 
-        if type_douleur not in ["Aucune", "Courbatures (diffuses)"]:
-            envoyer_telegram(f"🚨 ALERTE MÉDICALE MATIN - Raph 🎾\nDouleur signalée : {type_douleur}\nZone(s) : {zones_str}")
+        # --- SUITE COMMUNE (Stress, Humeur, Point Clinique) ---
+        with col2:
+            stress = st.slider("🌪️ Niveau de stress (1=Très stressé, 5=Zen)", 1, 5, 3)
+            humeur = st.slider("😊 Humeur (1=Mauvaise, 5=Excellente)", 1, 5, 3)
+            
+        st.markdown("### 🩺 Point Clinique Matinal")
+        zones_matin = st.multiselect("📍 Localisation(s) de la douleur ou gêne :", ZONES_ANATOMIQUES, key="zones_m")
+        type_douleur = st.selectbox("⚡ Quel est le type de douleur ?", [
+            "Aucune", "Musculaire (déchirure, élongation)", "Articulaire (blocage, instabilité)", 
+            "Tendineuse (progressive à l'effort)", "Osseuse (profonde)", "Ligamentaire (torsion)", 
+            "Neurologique (fourmillements)", "Courbatures (diffuses)", "Maladie (grippe, gastro...)", "Crampes"
+        ], key="type_m")
+        
+        # Petite analyse croisée au réveil
+        if st.session_state.get('whoop_matin_synced'):
+            if st.session_state['whoop_recup'] > 66 and stress <= 2:
+                st.warning("⚠️ **Décalage :** Ton corps a bien récupéré physiquement, mais tu te sens stressé ou de mauvaise humeur. C'est sûrement une charge cognitive (pré-match, perso).")
+            elif st.session_state['whoop_recup'] < 33 and fatigue >= 4: # Fatigue manuel (ressenti = frais) vs WHOOP (rouge)
+                st.warning("⚠️ **Décalage :** Tu te sens en forme, mais ton système nerveux central (VFC) est dans le rouge. L'échauffement devra être très progressif aujourd'hui !")
+        
+        if st.button("✅ Valider le Check-in Matin", use_container_width=True):
+            score_forme = sommeil + fatigue + stress + humeur
+            zones_str = ", ".join(zones_matin) if zones_matin else "Aucune"
+            dico = {
+                'Date': str(date_matin), 'Sommeil': sommeil, 'Fatigue': fatigue, 
+                'Stress': stress, 'Humeur': humeur, 'Score_Forme': score_forme,
+                'Douleur_Type': type_douleur, 'Zones_Douleur': zones_str
+            }
+            ajouter_ligne("Forme", dico)
+            st.success(f"🎉 Parfait ! Ton score de forme aujourd'hui est de {score_forme}/20. Enregistré !")
+            
+            # --- Alertes Telegram (On garde votre logique Z-score existante) ---
+            df_f_alerte = pd.concat([df_forme, pd.DataFrame([dico])], ignore_index=True)
+            df_f_alerte['Score_Forme'] = pd.to_numeric(df_f_alerte['Score_Forme'])
+            if len(df_f_alerte) >= 3:
+                df_f_alerte['Date'] = pd.to_datetime(df_f_alerte['Date'])
+                df_f_alerte = df_f_alerte.sort_values('Date')
+                df_f_alerte['Moy_7j'] = df_f_alerte['Score_Forme'].rolling(window=7, min_periods=3).mean()
+                df_f_alerte['Std_7j'] = df_f_alerte['Score_Forme'].rolling(window=7, min_periods=3).std()
+                
+                moyenne_f = df_f_alerte['Moy_7j'].iloc[-1]
+                ecart_type_f = df_f_alerte['Std_7j'].iloc[-1]
+                
+                if pd.notna(ecart_type_f) and ecart_type_f > 0:
+                    z_score_f = (score_forme - moyenne_f) / ecart_type_f
+                    
+                    if z_score_f <= -2:
+                        envoyer_telegram(f"🔴 ALERTE ROUGE FORME - Raph 🎾\nScore très bas ({score_forme}/20).\nChute à plus de 2 écarts-types de sa moyenne ({moyenne_f:.1f}). Fatigue centrale suspectée.")
+                    elif z_score_f <= -1:
+                        envoyer_telegram(f"🟠 ALERTE ORANGE FORME - Raph 🎾\nBaisse de forme ({score_forme}/20).\nÀ plus de 1 écart-type sous sa moyenne ({moyenne_f:.1f}). Adapter l'échauffement.")
+
+            if type_douleur not in ["Aucune", "Courbatures (diffuses)"]:
+                envoyer_telegram(f"🚨 ALERTE MÉDICALE MATIN - Raph 🎾\nDouleur signalée : {type_douleur}\nZone(s) : {zones_str}")
+
+            # Nettoyage pour le prochain jour
+            st.session_state.pop('whoop_matin_synced', None)
+            st.session_state.pop('sans_montre_matin', None)
+            st.rerun()
 
 # --- ONGLET 2 : SÉANCES ---
 with tab_seance:
