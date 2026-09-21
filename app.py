@@ -321,23 +321,183 @@ with tab_coach:
         st.success("🔓 Accès autorisé.")
         st.header("👑 Tableau de bord du Préparateur Physique")
         
-        # Génération de fausses données pour la simulation
-        import numpy as np
+        # --- 1. GRAPHIQUE DE CHARGE RÉEL (ISSU DE GOOGLE SHEETS) ---
+        st.subheader("📈 1. Suivi de la Charge d'Entraînement (sRPE)")
+        if not df_seances.empty and 'Charge' in df_seances.columns:
+            st.info("Visualisation de la charge de travail réelle enregistrée dans la base de données.")
+            df_s_coach = df_seances.copy()
+            df_s_coach['Date'] = pd.to_datetime(df_s_coach['Date'])
+            df_s_coach = df_s_coach.sort_values('Date')
+            
+            # Calcul de la charge chronique (moyenne mobile sur 7 jours)
+            df_s_coach['Charge_Chronique (Lissage 7j)'] = df_s_coach['Charge'].rolling(window=7, min_periods=1).mean()
+            
+            df_chart_charge = df_s_coach.set_index('Date')[['Charge', 'Charge_Chronique (Lissage 7j)']]
+            st.line_chart(df_chart_charge)
+        else:
+            st.info("Pas encore assez de données de séances pour afficher le graphique de charge.")
         
-        # 1. Simulation des données Matin (30 derniers jours)
-        dates_mois = pd.date_range(end=date.today(), periods=30)
-        scores_forme = np.random.normal(14, 2, 30).clip(5, 20)
-        whoop_recup = np.random.normal(65, 15, 30).clip(10, 100)
+        st.markdown("---")
         
-        df_simul_matin = pd.DataFrame({'Date': dates_mois, 'Score Forme (Subjectif)': scores_forme, 'WHOOP Récup (Objectif)': whoop_recup})
-        df_simul_matin.set_index('Date', inplace=True)
+        # --- 2. GRAPHIQUE DE FORME RÉEL (ISSU DE GOOGLE SHEETS) ---
+        st.subheader("🔋 2. Évolution du Score de Forme (Matin)")
+        if not df_forme.empty and 'Score_Forme' in df_forme.columns:
+            df_f_coach = df_forme.copy()
+            df_f_coach['Date'] = pd.to_datetime(df_f_coach['Date'])
+            df_f_coach = df_f_coach.sort_values('Date')
+            
+            df_chart_forme = df_f_coach.set_index('Date')[['Score_Forme']]
+            st.line_chart(df_chart_forme)
+        else:
+            st.info("Pas encore assez de données de forme matinale.")
         
-        # 2. Simulation des données Séances (Charge)
-        charge_quotidienne = np.random.normal(400, 150, 30).clip(100, 800)
-        df_simul_charge = pd.DataFrame({'Date': dates_mois, 'Charge_Jour': charge_quotidienne})
-        df_simul_charge['Charge_Chronique (Lissage 7j)'] = df_simul_charge['Charge_Jour'].rolling(window=7).mean()
-        df_simul_charge.set_index('Date', inplace=True)
+        st.markdown("---")
+        
+        # --- ALERTES AUTOMATIQUES BASÉES SUR LES VRAIES DONNÉES ---
+        st.subheader("🚨 Alertes cliniques et état actuel")
+        
+        # Vérification des dernières douleurs signalées dans le Google Sheets
+        derniere_douleur_matin = "Aucune"
+        derniere_douleur_soir = "RAS / Normal"
+        
+        if not df_forme.empty and 'Douleur_Type' in df_forme.columns:
+            derniere_douleur_matin = df_forme.iloc[-1].get('Douleur_Type', 'Aucune')
+            
+        if not df_soir.empty and 'Type_Douleur' in df_soir.columns:
+            derniere_douleur_soir = df_soir.iloc[-1].get('Type_Douleur', 'RAS / Normal')
+            
+        colA, colB, colC = st.columns(3)
+        colA.metric("Dernier Score Forme", f"{df_forme.iloc[-1]['Score_Forme']}/20" if not df_forme.empty else "N/A")
+        
+        if derniere_douleur_matin != "Aucune":
+            colB.warning(f"Matin : {derniere_douleur_matin}")
+        else:
+            colB.success("Matin : Pas de douleur")
+            
+        if derniere_douleur_soir not in ["RAS / Normal", "Aucune"]:
+            colC.error(f"Soir : {derniere_douleur_soir}")
+        else:
+            colC.success("Soir : RAS")
+                    
+        st.markdown("---")
+        st.markdown("## 🏋️‍♂️ Suivi des Évaluations Physiques (Tests)")
+                
+        with st.expander("➕ Saisir un nouveau résultat de Test"):
+            col_t1, col_t2 = st.columns(2)
+            with col_t1:
+                date_test = st.date_input("Date du test", value=date.today(), key="d_test")
+                periode = st.selectbox("Période d'évaluation", ["Test Initial (Septembre)", "Test Intermédiaire (Hiver)", "Test Final (Printemps)"])
+                
+                nom_test = st.selectbox("Type de Test", [
+                    "VMA", "Sprint 10m", "Suicide", "Taille", "Taille bras levés", "Poids", "Envergure",
+                    "Mobilité - Cheville", "Mobilité - Ischio (doigt par terre)", "Mobilité - Quadri (touche fesse)",
+                    "Mobilité - Épaule à 90°", "Mobilité - Épaule bras tendus", "Test cognitif",
+                    "Triple saut sur 1 pied sans élan", "Tour de 4 plots aller-retour (5m d'écart)"
+                ])
+                cote = st.selectbox("Côté / Jambe (si applicable)", ["Aucun / Bilatéral", "Droite", "Gauche"])
+                
+            with col_t2:
+                resultat = st.number_input("Résultat obtenu", format="%.2f", step=0.1)
+                unite = st.text_input("Unité (ex: sec, cm, kg, palier)")
+                objectif = st.text_input("Objectif fixé pour le prochain test")
+                
+            if st.button("💾 Enregistrer le résultat du Test", use_container_width=True):
+                dico_test = {
+                    'Date': str(date_test), 'Periode': periode, 'Test': nom_test, 'Cote': cote, 
+                    'Resultat': resultat, 'Unite': unite, 'Objectif_Prochain': objectif
+                }
+                ajouter_ligne("Tests", dico_test)
+                st.success("Résultat de test enregistré avec succès !")
+                st.rerun()
 
+        if not df_tests.empty:
+            st.dataframe(df_tests, use_container_width=True)
+            index_a_supprimer_t = st.selectbox("Sélectionner la ligne à supprimer (Tests) :", df_tests.index, key="del_t")
+            if st.button("🗑️ Supprimer ce test"):
+                supprimer_ligne_gsheets("Tests", index_a_supprimer_t)
+                st.success("Test supprimé du Google Sheets !")
+                st.rerun()
+            csv_tests = df_tests.to_csv(index=False).encode('utf-8')
+            st.download_button(label="📥 Télécharger la base TESTS (CSV)", data=csv_tests, file_name='tests_physiques.csv', mime='text/csv')
+        else:
+            st.info("Aucun résultat de test n'a encore été enregistré.")
+
+        st.markdown("---")
+        st.markdown("## 📈 Analyses & Sommes Glissantes de Charge")
+                
+        # Section des charges cumulées réelles
+        if not df_seances.empty and 'Charge' in df_seances.columns:
+            vue_charge = st.radio("Mode d'affichage des charges :", ["Séances par type (Empilé)", "Somme cumulative (3j / 7j / 21j)"], horizontal=True)
+            
+            df_s = df_seances.copy()
+            df_s['Date'] = pd.to_datetime(df_s['Date'])
+            
+            if vue_charge == "Séances par type (Empilé)":
+                df_pivot = df_s.pivot_table(index='Date', columns='Type', values='Charge', aggfunc='sum').fillna(0)
+                df_pivot.index = df_pivot.index.strftime('%Y-%m-%d')
+                st.bar_chart(df_pivot)
+            else:
+                fenetre = st.selectbox("Sélectionner la période glissante :", ["3 jours glissants", "7 jours glissants", "21 jours glissants"])
+                jours = 21 if "21" in fenetre else (7 if "7" in fenetre else 3)
+                
+                df_jour = df_s.groupby('Date')['Charge'].sum().reset_index()
+                df_jour = df_jour.set_index('Date').sort_index()
+                
+                df_glissant = df_jour.rolling(window=f'{jours}D', min_periods=1).sum()
+                
+                val_max = df_glissant['Charge'].max() if not df_glissant.empty else 0
+                val_min = df_glissant['Charge'].min() if not df_glissant.empty else 0
+                
+                df_glissant['Somme Max (Plafond)'] = val_max
+                df_glissant['Somme Min (Plancher)'] = val_min
+                
+                df_glissant.index = df_glissant.index.strftime('%Y-%m-%d')
+                
+                st.line_chart(df_glissant)
+                
+                col_info1, col_info2 = st.columns(2)
+                with col_info1:
+                    st.metric(label=f"🔴 Somme Max glissante ({jours}j)", value=f"{val_max:.1f} u")
+                with col_info2:
+                    st.metric(label=f"🟢 Somme Min glissante ({jours}j)", value=f"{val_min:.1f} u")
+        else:
+            st.info("Pas assez de données de séances pour calculer les charges glissantes.")
+
+        st.markdown("---")
+        
+        st.subheader("🌅 Base de données : Forme (Matin)")
+        if not df_forme.empty:
+            st.dataframe(df_forme, use_container_width=True)
+            index_a_supprimer_m = st.selectbox("Sélectionner la ligne à supprimer (Matin) :", df_forme.index, key="del_m2")
+            if st.button("🗑️ Supprimer cette ligne (Matin)"):
+                supprimer_ligne_gsheets("Forme", index_a_supprimer_m)
+                st.success("Ligne supprimée du Google Sheets !")
+                st.rerun()
+        
+        st.divider()
+        
+        st.subheader("🎾 Base de données : Séances & Charges (sRPE)")
+        if not df_seances.empty:
+            st.dataframe(df_seances, use_container_width=True)
+            index_a_supprimer_s = st.selectbox("Sélectionner la ligne à supprimer (Séances) :", df_seances.index, key="del_s2")
+            if st.button("🗑️ Supprimer cette ligne (Séances)"):
+                supprimer_ligne_gsheets("Seances", index_a_supprimer_s)
+                st.success("Séance supprimée du Google Sheets !")
+                st.rerun()
+        
+        st.divider()
+        
+        st.subheader("🌙 Base de données : Flash Soir")
+        if not df_soir.empty:
+            st.dataframe(df_soir, use_container_width=True)
+            index_a_supprimer_soir = st.selectbox("Sélectionner la ligne à supprimer (Soir) :", df_soir.index, key="del_soir2")
+            if st.button("🗑️ Supprimer cette ligne (Soir)"):
+                supprimer_ligne_gsheets("Soir", index_a_supprimer_soir)
+                st.success("Bilan supprimé du Google Sheets !")
+                st.rerun()
+        
+    elif saisie_mdp != "":
+        st.error("❌ Mot de passe incorrect.")
         # --- AFFICHAGE DES GRAPHIQUES ---
         st.subheader("📈 1. Suivi de la Charge d'Entraînement (sRPE)")
         st.info("Ce graphique permet de comparer la charge du jour avec la charge chronique (moyenne lissée sur 7 jours) pour éviter les pics de fatigue.")
