@@ -333,8 +333,7 @@ with tab_soir:
         if "3" in etat_jour or "4" in etat_jour or type_soir not in ["RAS / Normal", "Musculaire"]:
             envoyer_telegram(f"🚨 ALERTE MÉDICALE SOIR - Raph 🎾\nBilan : {etat_jour}\nDouleur : {type_soir}\nZone(s) : {zones_soir_str}")
 
-# --- ONGLET 4 : COACH ---
-# --- ONGLET 3 : VUE COACH (SIMULATEUR) ---
+# --- ONGLET 4 : COACH (SIMULATION) ---
 with tab_coach:
     st.header("👑 Tableau de bord du Préparateur Physique")
     
@@ -374,7 +373,6 @@ with tab_coach:
     colA.metric("Charge Hebdo", "3 250 UA", delta="-150 vs sem. dernière", delta_color="normal")
     colB.metric("Moyenne Récup WHOOP", "58 %", delta="-12%", delta_color="inverse")
     colC.warning("Tendinite Épaule (Signalée J-2)")
-                
               
         # ==========================================
 
