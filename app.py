@@ -229,7 +229,7 @@ with tab_seance:
             st.warning("⚠️ Mode manuel activé : Tu dois renseigner le type et la durée toi-même.")
             col_m1, col_m2 = st.columns(2)
             with col_m1:
-                type_final = st.selectbox("Type de séance", ["Prépa Physique", "Tennis", "Récupération", "Match"])
+                ttype_final = st.selectbox("Type de séance", ["Échauffement Pré-Match", "Prépa Physique", "Tennis", "Récupération", "Match"])
             with col_m2:
                 duree_finale = st.number_input("Durée (minutes)", min_value=1, value=60)
             strain_final = 0.0 
