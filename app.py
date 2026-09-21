@@ -334,85 +334,48 @@ with tab_soir:
             envoyer_telegram(f"🚨 ALERTE MÉDICALE SOIR - Raph 🎾\nBilan : {etat_jour}\nDouleur : {type_soir}\nZone(s) : {zones_soir_str}")
 
 # --- ONGLET 4 : COACH ---
+# --- ONGLET 3 : VUE COACH (SIMULATEUR) ---
 with tab_coach:
-    st.markdown("### 🔐 Espace Réservé au Staff")
-    saisie_mdp = st.text_input("Entrez le mot de passe administrateur :", type="password")
+    st.header("👑 Tableau de bord du Préparateur Physique")
     
-    if saisie_mdp == MOT_DE_PASSE_COACH:
-        st.success("🔓 Accès autorisé.")
-        
-        # ==========================================
-        # 🚨 SYSTÈME D'ALERTES Z-SCORE (Écart-type)
-        # ==========================================
-        st.markdown("---")
-        st.markdown("## 🚨 Tableau de Bord des Alertes (Prévention des Blessures)")
-        
-        col_alerte1, col_alerte2 = st.columns(2)
-        
-        with col_alerte1:
-            st.markdown("#### 🧠 Alerte État de Forme (7 derniers jours)")
-            if not df_forme.empty and len(df_forme) >= 3:
-                df_f = df_forme.copy()
-                df_f['Date'] = pd.to_datetime(df_f['Date'])
-                df_f = df_f.sort_values('Date')
+    # Génération de fausses données pour la simulation
+    import numpy as np
+    
+    # 1. Simulation des données Matin (30 derniers jours)
+    dates_mois = pd.date_range(end=date.today(), periods=30)
+    scores_forme = np.random.normal(14, 2, 30).clip(5, 20)
+    whoop_recup = np.random.normal(65, 15, 30).clip(10, 100)
+    
+    df_simul_matin = pd.DataFrame({'Date': dates_mois, 'Score Forme (Subjectif)': scores_forme, 'WHOOP Récup (Objectif)': whoop_recup})
+    df_simul_matin.set_index('Date', inplace=True)
+    
+    # 2. Simulation des données Séances (Charge)
+    charge_quotidienne = np.random.normal(400, 150, 30).clip(100, 800)
+    df_simul_charge = pd.DataFrame({'Date': dates_mois, 'Charge_Jour': charge_quotidienne})
+    df_simul_charge['Charge_Chronique (Lissage 7j)'] = df_simul_charge['Charge_Jour'].rolling(window=7).mean()
+    df_simul_charge.set_index('Date', inplace=True)
+
+    # --- AFFICHAGE DES GRAPHIQUES ---
+    st.subheader("📈 1. Suivi de la Charge d'Entraînement (sRPE)")
+    st.info("Ce graphique permet de comparer la charge du jour avec la charge chronique (moyenne lissée sur 7 jours) pour éviter les pics de fatigue.")
+    st.line_chart(df_simul_charge[['Charge_Jour', 'Charge_Chronique (Lissage 7j)']])
+    
+    st.markdown("---")
+    
+    st.subheader("🔋 2. Corrélation : Ressenti vs Données WHOOP")
+    st.info("Observez si Raph ressent bien sa fatigue. Si la courbe bleue (Ressenti) est haute mais la rouge (WHOOP) s'effondre, c'est une alerte de fatigue nerveuse cachée.")
+    st.line_chart(df_simul_matin)
+    
+    st.markdown("---")
+    
+    # Indicateurs d'alerte rapides
+    st.subheader("🚨 Alertes actives aujourd'hui")
+    colA, colB, colC = st.columns(3)
+    colA.metric("Charge Hebdo", "3 250 UA", delta="-150 vs sem. dernière", delta_color="normal")
+    colB.metric("Moyenne Récup WHOOP", "58 %", delta="-12%", delta_color="inverse")
+    colC.warning("Tendinite Épaule (Signalée J-2)")
                 
-                df_f['Moy_7j'] = df_f['Score_Forme'].rolling(window=7, min_periods=3).mean()
-                df_f['Std_7j'] = df_f['Score_Forme'].rolling(window=7, min_periods=3).std()
-                
-                dernier_score = df_f['Score_Forme'].iloc[-1]
-                moyenne_f = df_f['Moy_7j'].iloc[-1]
-                ecart_type_f = df_f['Std_7j'].iloc[-1]
-                
-                if pd.notna(ecart_type_f) and ecart_type_f > 0:
-                    z_score_f = (dernier_score - moyenne_f) / ecart_type_f
-                    
-                    if z_score_f <= -2:
-                        st.error(f"🔴 **ALERTE ROUGE** : Score très bas ({dernier_score}/20). Chute critique à plus de 2 écarts-types de la moyenne ({moyenne_f:.1f}). Fatigue centrale suspectée.")
-                    elif z_score_f <= -1:
-                        st.warning(f"🟠 **ALERTE ORANGE** : Baisse de forme ({dernier_score}/20). À plus de 1 écart-type sous la moyenne ({moyenne_f:.1f}). Adapter l'échauffement.")
-                    elif z_score_f >= 1:
-                        st.success(f"🟢 **EXCELLENT** : Forme optimale ({dernier_score}/20). Supérieure à la moyenne récente.")
-                    else:
-                        st.info(f"✅ Forme stable et dans la norme (Moyenne : {moyenne_f:.1f}).")
-                else:
-                    st.info("Calcul en cours, attente de variations des scores...")
-            else:
-                st.info("Pas assez de données pour l'analyse de forme (minimum 3 jours nécessaires).")
-                
-        with col_alerte2:
-            st.markdown("#### ⚡ Alerte Charge sRPE (21 derniers jours)")
-            if not df_seances.empty and len(df_seances) >= 3:
-                df_s = df_seances.copy()
-                df_s['Date'] = pd.to_datetime(df_s['Date'])
-                
-                df_jour = df_s.groupby('Date')['Charge'].sum().reset_index()
-                df_jour = df_jour.sort_values('Date')
-                
-                df_jour['Moy_21j'] = df_jour['Charge'].rolling(window=21, min_periods=3).mean()
-                df_jour['Std_21j'] = df_jour['Charge'].rolling(window=21, min_periods=3).std()
-                
-                derniere_charge = df_jour['Charge'].iloc[-1]
-                moyenne_c = df_jour['Moy_21j'].iloc[-1]
-                ecart_type_c = df_jour['Std_21j'].iloc[-1]
-                
-                if pd.notna(ecart_type_c) and ecart_type_c > 0:
-                    z_score_c = (derniere_charge - moyenne_c) / ecart_type_c
-                    
-                    if z_score_c >= 2:
-                        st.error(f"🔴 **ALERTE ROUGE (Surcharge)** : Pic critique ({derniere_charge:.0f} u) ! Plus de 2 écarts-types au-dessus de la normale ({moyenne_c:.0f} u). Grand risque de blessure tissulaire.")
-                    elif z_score_c >= 1:
-                        st.warning(f"🟠 **ALERTE ORANGE (Surcharge)** : Charge élevée ({derniere_charge:.0f} u). Plus de 1 écart-type au-dessus de la moyenne. Surveiller la récupération.")
-                    elif z_score_c <= -2:
-                        st.error(f"🔴 **ALERTE ROUGE (Sous-charge)** : Baisse critique de charge ({derniere_charge:.0f} u). Plus de 2 écarts-types sous la moyenne. Risque de désentraînement si prolongé.")
-                    elif z_score_c <= -1:
-                        st.warning(f"🟠 **ALERTE ORANGE (Sous-charge)** : Charge très faible ({derniere_charge:.0f} u). Phase d'affûtage ou anomalie ?")
-                    else:
-                        st.info(f"✅ Charge quotidienne dans les standards habituels (Moyenne : {moyenne_c:.0f} u).")
-                else:
-                    st.info("Calcul en cours, attente de variations des charges...")
-            else:
-                st.info("Pas assez de données pour l'analyse de charge (minimum 3 jours nécessaires).")
-                
+              
         # ==========================================
 
         st.markdown("---")
