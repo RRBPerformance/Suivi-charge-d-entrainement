@@ -378,8 +378,8 @@ with tab_coach:
               
         # ==========================================
 
-        st.markdown("---")
-        st.markdown("## 🏋️‍♂️ Suivi des Évaluations Physiques (Tests)")
+st.markdown("---")
+st.markdown("## 🏋️‍♂️ Suivi des Évaluations Physiques (Tests)")
         
         with st.expander("➕ Saisir un nouveau résultat de Test"):
             col_t1, col_t2 = st.columns(2)
