@@ -106,6 +106,43 @@ ZONES_ANATOMIQUES = [
 # --- ONGLET 1 : MATIN ---
 with tab_matin:
     st.info("💡 **Consigne :** À remplir chaque matin au réveil pour adapter la charge de la journée.")
+    
+    # --- MÉCANIQUE DE CONNEXION WHOOP ---
+    client_id = st.secrets["WHOOP_CLIENT_ID"]
+    client_secret = st.secrets["WHOOP_CLIENT_SECRET"]
+    redirect_uri = "https://suivi-charge-rrb.streamlit.app/"
+    
+    if "code" in st.query_params:
+        code_auth = st.query_params["code"]
+        token_url = "https://api.prod.whoop.com/oauth/oauth2/token"
+        payload = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "grant_type": "authorization_code",
+            "code": code_auth,
+            "redirect_uri": redirect_uri
+        }
+        rep = requests.post(token_url, data=payload)
+        
+        if rep.status_code == 200:
+            st.session_state['whoop_token'] = rep.json()['access_token']
+            st.query_params.clear() 
+            st.success("✅ Synchronisation WHOOP réussie !")
+        else:
+            st.error("❌ Échec de la connexion à WHOOP.")
+
+    if 'whoop_token' not in st.session_state:
+        scopes = "read:recovery read:sleep read:cycles read:workout"
+        auth_url = f"https://api.prod.whoop.com/oauth/oauth2/auth?client_id={client_id}&response_type=code&redirect_uri={redirect_uri}&scope={scopes}"
+        
+        st.markdown(f'''
+            <a href="{auth_url}" target="_self">
+                <button style="background-color: #000000; color: white; padding: 10px 20px; border-radius: 5px; border: none; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 20px;">
+                    ⚫ Se connecter avec WHOOP
+                </button>
+            </a>
+        ''', unsafe_allow_html=True)
+        
     date_matin = st.date_input("📅 Date du jour", value=date.today(), key="date_m")
     
     st.markdown("### 🧠 État de Forme (Hooper)")
