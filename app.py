@@ -421,8 +421,8 @@ if not df_tests.empty:
 else:
             st.info("Aucun résultat de test n'a encore été enregistré.")
 
-        st.markdown("---")
-        st.markdown("## 📈 Tableaux de Bord & Sommes Glissantes de Charge")
+st.markdown("---")
+st.markdown("## 📈 Tableaux de Bord & Sommes Glissantes de Charge")
         
         col_g1, col_g2 = st.columns(2)
         
