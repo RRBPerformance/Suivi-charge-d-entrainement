@@ -400,7 +400,7 @@ with col_t2:
                 unite = st.text_input("Unité (ex: sec, cm, kg, palier)")
                 objectif = st.text_input("Objectif fixé pour le prochain test")
                 
-            if st.button("💾 Enregistrer le résultat du Test", use_container_width=True):
+if st.button("💾 Enregistrer le résultat du Test", use_container_width=True):
                 dico_test = {
                     'Date': str(date_test), 'Periode': periode, 'Test': nom_test, 'Cote': cote, 
                     'Resultat': resultat, 'Unite': unite, 'Objectif_Prochain': objectif
@@ -409,7 +409,7 @@ with col_t2:
                 st.success("Résultat de test enregistré avec succès !")
                 st.rerun()
 
-        if not df_tests.empty:
+if not df_tests.empty:
             st.dataframe(df_tests, use_container_width=True)
             index_a_supprimer_t = st.selectbox("Sélectionner la ligne à supprimer (Tests) :", df_tests.index, key="del_t")
             if st.button("🗑️ Supprimer ce test"):
