@@ -395,7 +395,7 @@ with col_t1:
                 ])
                 cote = st.selectbox("Côté / Jambe (si applicable)", ["Aucun / Bilatéral", "Droite", "Gauche"])
                 
-            with col_t2:
+with col_t2:
                 resultat = st.number_input("Résultat obtenu", format="%.2f", step=0.1)
                 unite = st.text_input("Unité (ex: sec, cm, kg, palier)")
                 objectif = st.text_input("Objectif fixé pour le prochain test")
