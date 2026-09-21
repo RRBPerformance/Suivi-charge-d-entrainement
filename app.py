@@ -197,7 +197,6 @@ with tab_matin:
             st.session_state.pop('whoop_matin_synced', None)
             st.session_state.pop('sans_montre_matin', None)
             st.rerun()
-
 # --- ONGLET 2 : SÉANCES ---
 with tab_seance:
     st.info("⏱️ **Rappel :** À remplir dans les 30 minutes suivant la fin de l'effort.")
@@ -209,6 +208,7 @@ with tab_seance:
         if st.button("🔄 Synchroniser ma montre", type="primary", use_container_width=True):
             st.session_state['whoop_synced'] = True
             st.session_state['sans_montre'] = False
+            # Simulation des données WHOOP (à remplacer par le vrai retour API)
             st.session_state['whoop_strain'] = 12.5  
             st.session_state['whoop_duree'] = 90     
             st.session_state['whoop_type'] = "Tennis"
@@ -225,25 +225,35 @@ with tab_seance:
         
         date_seance = st.date_input("📅 Date de la séance", value=date.today(), key="date_s")
         
+        # --- MODE SANS MONTRE ---
         if st.session_state.get('sans_montre'):
             st.warning("⚠️ Mode manuel activé : Tu dois renseigner le type et la durée toi-même.")
             col_m1, col_m2 = st.columns(2)
             with col_m1:
-                ttype_final = st.selectbox("Type de séance", ["Échauffement Pré-Match", "Prépa Physique", "Tennis", "Récupération", "Match"])
+                type_final = st.selectbox("Type de séance", ["Échauffement Pré-Match", "Prépa Physique", "Tennis", "Récupération", "Match"])
             with col_m2:
                 duree_finale = st.number_input("Durée (minutes)", min_value=1, value=60)
             strain_final = 0.0 
             
+        # --- MODE AVEC MONTRE ---
         else:
             col_w1, col_w2, col_w3 = st.columns(3)
             with col_w1:
-                st.metric("Activité", st.session_state['whoop_type'])
+                st.metric("Activité détectée", st.session_state['whoop_type'])
             with col_w2:
                 st.metric("Durée (min)", st.session_state['whoop_duree'])
             with col_w3:
                 st.metric("Score d'Effort", f"{st.session_state['whoop_strain']} / 21")
                 
-            type_final = st.session_state['whoop_type']
+            # WHOOP a donné l'activité, mais on affine pour le coach (Match, Entraînement, Échauffement...)
+            type_final = st.selectbox("Préciser la nature de la séance (basé sur WHOOP)", [
+                "Tennis - Entraînement", 
+                "Tennis - Match", 
+                "Échauffement Pré-Match", 
+                "Prépa Physique", 
+                "Récupération"
+            ])
+            
             duree_finale = st.session_state['whoop_duree']
             strain_final = st.session_state['whoop_strain']
 
@@ -284,7 +294,6 @@ with tab_seance:
             st.session_state.pop('whoop_synced', None)
             st.session_state.pop('sans_montre', None)
             st.rerun()
-    
 # --- ONGLET 3 : BILAN SOIR ---
 with tab_soir:
     st.info("🌙 **Flash Soir :** Dernier bilan avant la récupération nocturne.")
