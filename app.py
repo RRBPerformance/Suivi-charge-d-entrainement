@@ -14,59 +14,35 @@ from oauth2client.service_account import ServiceAccountCredentials
 import requests
 import urllib.parse
 
-# --- INITIALISATION DE LA SESSION WHOOP ---
-if "whoop_access_token" not in st.session_state:
-    st.session_state["whoop_access_token"] = None
-
-# --- GESTION DU RETOUR OAUTH WHOOP ---
-query_params = st.query_params
-if "code" in query_params and not st.session_state["whoop_access_token"]:
-    code = query_params["code"]
-    token_url = "https://api.prod.whoop.com/oauth/oauth2/token"
-    payload = {
-        "grant_type": "authorization_code",
-        "code": code,
-        "client_id": st.secrets["WHOOP_CLIENT_ID"],
-        "client_secret": st.secrets["WHOOP_CLIENT_SECRET"],
-        "redirect_uri": st.secrets["WHOOP_REDIRECT_URI"]
-    }
-    response = requests.post(token_url, data=payload)
-    if response.status_code == 200:
-        st.session_state["whoop_access_token"] = response.json().get("access_token")
-        st.success("✅ Connexion à WHOOP réussie !")
-        st.query_params.clear()
-        st.rerun()
-    else:
-        st.error(f"Erreur lors de la connexion Whoop : {response.text}")
-
-# Configuration de la page
+# Configuration de la page (doit toujours être en premier)
 st.set_page_config(page_title="Suivi de Charge RRB", page_icon="🎾", layout="wide")
 
 # Mot de passe sécurisé
 MOT_DE_PASSE_COACH = "RomainRB2004!"
 
-# --- INTERCEPTION DU RETOUR WHOOP ---
+# --- INITIALISATION DE LA SESSION WHOOP ---
+if "whoop_token" not in st.session_state:
+    st.session_state["whoop_token"] = None
+
+# --- GESTION DU RETOUR OAUTH WHOOP ---
 query_params = st.query_params
-if "code" in query_params:
+if "code" in query_params and not st.session_state["whoop_token"]:
     auth_code = query_params["code"]
-    st.success(f"🎉 Code d'autorisation Whoop récupéré avec succès ! (Code: {auth_code[:6]}...)")
-    
-    # Échange du code contre le jeton d'accès Whoop
+    token_url = "https://api.prod.whoop.com/oauth/oauth2/token"
+    payload = {
+        "grant_type": "authorization_code",
+        "client_id": st.secrets["WHOOP_CLIENT_ID"],
+        "client_secret": st.secrets["WHOOP_CLIENT_SECRET"],
+        "code": auth_code,
+        "redirect_uri": st.secrets["WHOOP_REDIRECT_URI"]
+    }
     try:
-        token_url = "https://api.prod.whoop.com/oauth/oauth2/token"
-        payload = {
-            "grant_type": "authorization_code",
-            "client_id": st.secrets["WHOOP_CLIENT_ID"],
-            "client_secret": st.secrets["WHOOP_CLIENT_SECRET"],
-            "code": auth_code,
-            "redirect_uri": st.secrets["WHOOP_REDIRECT_URI"]
-        }
         response = requests.post(token_url, data=payload)
         if response.status_code == 200:
-            token_data = response.json()
-            access_token = token_data.get("access_token")
-            st.session_state["whoop_token"] = access_token
-            st.success("✅ Connecté à Whoop avec succès ! Vos données de récupération vont se synchroniser.")
+            st.session_state["whoop_token"] = response.json().get("access_token")
+            st.success("✅ Connecté à Whoop avec succès ! Vos données vont se synchroniser.")
+            st.query_params.clear()
+            st.rerun()
         else:
             st.error(f"Erreur lors de l'échange du token Whoop : {response.text}")
     except Exception as e:
@@ -80,7 +56,7 @@ def envoyer_telegram(message):
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {"chat_id": chat_id, "text": message}
         requests.post(url, json=payload)
-    except Exception as e:
+    except Exception:
         pass 
 
 # --- CONNEXION GOOGLE SHEETS ---
@@ -99,14 +75,12 @@ def charger_donnees():
         df_forme = pd.DataFrame(sh.worksheet("Forme").get_all_records())
         df_seances = pd.DataFrame(sh.worksheet("Seances").get_all_records())
         df_soir = pd.DataFrame(sh.worksheet("Soir").get_all_records())
-        
         try:
             df_tests = pd.DataFrame(sh.worksheet("Tests").get_all_records())
         except Exception:
             df_tests = pd.DataFrame(columns=['Date', 'Periode', 'Test', 'Cote', 'Resultat', 'Unite', 'Objectif_Prochain'])
-            
         return df_forme, df_seances, df_soir, df_tests
-    except Exception as e:
+    except Exception:
         df_forme = pd.DataFrame(columns=['Date', 'Sommeil', 'Fatigue', 'Stress', 'Humeur', 'Score_Forme', 'Douleur_Type', 'Zones_Douleur'])
         df_seances = pd.DataFrame(columns=['Date', 'Type', 'Duree', 'RPE', 'Charge', 'Satisfaction'])
         df_soir = pd.DataFrame(columns=['Date', 'Etat_Jour', 'Zones_Douleur_Soir', 'Type_Douleur'])
@@ -131,13 +105,13 @@ def supprimer_ligne_gsheets(onglet_nom, index_ligne):
     except Exception as e:
         st.error(f"Erreur lors de la suppression : {e}")
 
-# Titre principal
+# --- INTERFACE UTILISATEUR ---
 st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Raph Tennis : Suivi de la Performance</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #6B7280;'>Monitoring quotidien - Optimisation et Prévention</p>", unsafe_allow_html=True)
 st.divider()
 
-# --- SECTION CONNEXION WHOOP PROPRE ---
-if "whoop_token" in st.session_state:
+# --- BOUTON DE CONNEXION WHOOP ---
+if st.session_state["whoop_token"]:
     st.success("🟢 Compte Whoop connecté et actif !")
 else:
     try:
