@@ -14,6 +14,31 @@ from oauth2client.service_account import ServiceAccountCredentials
 import requests
 import urllib.parse
 
+# --- INITIALISATION DE LA SESSION WHOOP ---
+if "whoop_access_token" not in st.session_state:
+    st.session_state["whoop_access_token"] = None
+
+# --- GESTION DU RETOUR OAUTH WHOOP ---
+query_params = st.query_params
+if "code" in query_params and not st.session_state["whoop_access_token"]:
+    code = query_params["code"]
+    token_url = "https://api.prod.whoop.com/oauth/oauth2/token"
+    payload = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "client_id": st.secrets["WHOOP_CLIENT_ID"],
+        "client_secret": st.secrets["WHOOP_CLIENT_SECRET"],
+        "redirect_uri": st.secrets["WHOOP_REDIRECT_URI"]
+    }
+    response = requests.post(token_url, data=payload)
+    if response.status_code == 200:
+        st.session_state["whoop_access_token"] = response.json().get("access_token")
+        st.success("✅ Connexion à WHOOP réussie !")
+        st.query_params.clear()
+        st.rerun()
+    else:
+        st.error(f"Erreur lors de la connexion Whoop : {response.text}")
+
 # Configuration de la page
 st.set_page_config(page_title="Suivi de Charge RRB", page_icon="🎾", layout="wide")
 
