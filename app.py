@@ -20,6 +20,33 @@ st.set_page_config(page_title="Suivi de Charge RRB", page_icon="🎾", layout="w
 # Mot de passe sécurisé
 MOT_DE_PASSE_COACH = "RomainRB2004!"
 
+# --- INTERCEPTION DU RETOUR WHOOP ---
+query_params = st.query_params
+if "code" in query_params:
+    auth_code = query_params["code"]
+    st.success(f"🎉 Code d'autorisation Whoop récupéré avec succès ! (Code: {auth_code[:6]}...)")
+    
+    # Échange du code contre le jeton d'accès Whoop
+    try:
+        token_url = "https://api.prod.whoop.com/oauth/oauth2/token"
+        payload = {
+            "grant_type": "authorization_code",
+            "client_id": st.secrets["WHOOP_CLIENT_ID"],
+            "client_secret": st.secrets["WHOOP_CLIENT_SECRET"],
+            "code": auth_code,
+            "redirect_uri": st.secrets["WHOOP_REDIRECT_URI"]
+        }
+        response = requests.post(token_url, data=payload)
+        if response.status_code == 200:
+            token_data = response.json()
+            access_token = token_data.get("access_token")
+            st.session_state["whoop_token"] = access_token
+            st.success("✅ Connecté à Whoop avec succès ! Vos données de récupération vont se synchroniser.")
+        else:
+            st.error(f"Erreur lors de l'échange du token Whoop : {response.text}")
+    except Exception as e:
+        st.error(f"Erreur de connexion Whoop : {e}")
+
 # --- FONCTION TELEGRAM ---
 def envoyer_telegram(message):
     try:
@@ -85,24 +112,27 @@ st.markdown("<p style='text-align: center; color: #6B7280;'>Monitoring quotidien
 st.divider()
 
 # --- SECTION CONNEXION WHOOP PROPRE ---
-try:
-    client_id = st.secrets["WHOOP_CLIENT_ID"]
-    redirect_uri = st.secrets["WHOOP_REDIRECT_URI"]
-    scope_str = "read:recovery read:cycles read:sleep read:workout"
-    
-    whoop_auth_url = (
-        f"https://api.prod.whoop.com/oauth/oauth2/auth?"
-        f"client_id={client_id}&"
-        f"redirect_uri={urllib.parse.quote(redirect_uri)}&"
-        f"response_type=code&"
-        f"scope={urllib.parse.quote(scope_str)}"
-    )
-    
-    col_w1, col_w2, col_w3 = st.columns([1, 2, 1])
-    with col_w2:
-        st.link_button("🔗 Se connecter avec WHOOP", whoop_auth_url, use_container_width=True)
-except Exception:
-    st.info("Configuration Whoop en cours de finalisation...")
+if "whoop_token" in st.session_state:
+    st.success("🟢 Compte Whoop connecté et actif !")
+else:
+    try:
+        client_id = st.secrets["WHOOP_CLIENT_ID"]
+        redirect_uri = st.secrets["WHOOP_REDIRECT_URI"]
+        scope_str = "read:recovery read:cycles read:sleep read:workout"
+        
+        whoop_auth_url = (
+            f"https://api.prod.whoop.com/oauth/oauth2/auth?"
+            f"client_id={client_id}&"
+            f"redirect_uri={urllib.parse.quote(redirect_uri)}&"
+            f"response_type=code&"
+            f"scope={urllib.parse.quote(scope_str)}"
+        )
+        
+        col_w1, col_w2, col_w3 = st.columns([1, 2, 1])
+        with col_w2:
+            st.link_button("🔗 Se connecter avec WHOOP", whoop_auth_url, use_container_width=True)
+    except Exception:
+        st.info("Configuration Whoop en cours de finalisation...")
 
 st.divider()
 
