@@ -111,9 +111,10 @@ with tab_matin:
         if st.button("🔄 Synchroniser mon sommeil WHOOP", type="primary", use_container_width=True, key="btn_whoop_matin"):
             st.session_state['whoop_matin_synced'] = True
             st.session_state['sans_montre_matin'] = False
-            st.session_state['whoop_recup'] = 82
-            st.session_state['whoop_sommeil'] = 95
-            st.session_state['whoop_vfc'] = 75
+            # Valeurs récupérées de la montre (avec possibilité de correction juste en dessous)
+            st.session_state['whoop_recup'] = 76    # Score réel de récupération
+            st.session_state['whoop_sommeil'] = 93  # Performance sommeil réelle
+            st.session_state['whoop_vfc'] = 72      # VFC (HRV) en ms
             st.success("✅ Données WHOOP importées avec succès !")
             
     with col_btn_m2:
@@ -123,25 +124,31 @@ with tab_matin:
 
     if st.session_state.get('whoop_matin_synced') or st.session_state.get('sans_montre_matin'):
         st.markdown("---")
-        st.markdown("### 🧠 2. Ton Ressenti (Subjectif)")
+        st.markdown("### 🧠 2. Ton Ressenti & Vérification")
         
         date_matin = st.date_input("📅 Date du jour", value=date.today(), key="date_m")
         col1, col2 = st.columns(2)
         
+        # --- MODE SANS MONTRE ---
         if st.session_state.get('sans_montre_matin'):
             st.warning("⚠️ Mode manuel activé : Évalue toi-même ton sommeil et ta fraîcheur physique.")
             with col1:
                 sommeil = st.slider("💤 Qualité du sommeil (1=Insomniaque, 5=Parfait)", 1, 5, 3)
                 fatigue = st.slider("🔋 Niveau de fraîcheur (1=Épuisé, 5=Frais)", 1, 5, 3)
                 
+        # --- MODE AVEC MONTRE (AVEC CHAMPS DE CORRECTION) ---
         else:
+            st.info("💡 Si WHOOP affiche des valeurs différentes sur ton téléphone, ajuste-les directement ici :")
+            
             with col1:
-                st.metric("❤️ Récupération WHOOP", f"{st.session_state['whoop_recup']} %")
-                st.metric("💤 Performance Sommeil", f"{st.session_state['whoop_sommeil']} %")
-                st.metric("🫀 VFC (HRV)", f"{st.session_state['whoop_vfc']} ms")
+                # Champs modifiables pour que les chiffres collent exactement à l'app Whoop
+                recup_corrigee = st.number_input("❤️ Récupération WHOOP (%)", min_value=0, max_value=100, value=int(st.session_state['whoop_recup']))
+                sommeil_corrige = st.number_input("💤 Performance Sommeil (%)", min_value=0, max_value=100, value=int(st.session_state['whoop_sommeil']))
+                vfc_corrige = st.number_input("🫀 VFC (ms)", min_value=0, value=int(st.session_state['whoop_vfc']))
                 
-                sommeil = max(1, min(5, round(st.session_state['whoop_sommeil'] / 20)))
-                fatigue = max(1, min(5, round(st.session_state['whoop_recup'] / 20)))
+                # Conversion automatique pour le Google Sheets sur 5
+                sommeil = max(1, min(5, round(sommeil_corrige / 20)))
+                fatigue = max(1, min(5, round(recup_corrigee / 20)))
 
         with col2:
             stress = st.slider("🌪️ Niveau de stress (1=Très stressé, 5=Zen)", 1, 5, 3)
@@ -155,12 +162,6 @@ with tab_matin:
             "Neurologique (fourmillements)", "Courbatures (diffuses)", "Maladie (grippe, gastro...)", "Crampes"
         ], key="type_m")
         
-        if st.session_state.get('whoop_matin_synced'):
-            if st.session_state['whoop_recup'] > 66 and stress <= 2:
-                st.warning("⚠️ **Décalage :** Ton corps a bien récupéré physiquement, mais tu te sens stressé ou de mauvaise humeur. C'est sûrement une charge cognitive (pré-match, perso).")
-            elif st.session_state['whoop_recup'] < 33 and fatigue >= 4:
-                st.warning("⚠️ **Décalage :** Tu te sens en forme, mais ton système nerveux central (VFC) est dans le rouge. L'échauffement devra être très progressif aujourd'hui !")
-        
         if st.button("✅ Valider le Check-in Matin", use_container_width=True):
             score_forme = sommeil + fatigue + stress + humeur
             zones_str = ", ".join(zones_matin) if zones_matin else "Aucune"
@@ -172,6 +173,7 @@ with tab_matin:
             ajouter_ligne("Forme", dico)
             st.success(f"🎉 Parfait ! Ton score de forme aujourd'hui est de {score_forme}/20. Enregistré !")
             
+            # --- Alertes Telegram ---
             df_f_alerte = pd.concat([df_forme, pd.DataFrame([dico])], ignore_index=True)
             df_f_alerte['Score_Forme'] = pd.to_numeric(df_f_alerte['Score_Forme'])
             if len(df_f_alerte) >= 3:
