@@ -240,6 +240,53 @@ with tab_seance:
     st.warning("⏱️ **Rappel :** À remplir dans les 30 minutes suivant la fin de l'effort pour une donnée sRPE fiable.")
     date_seance = st.date_input("📅 Date de la séance", value=date.today(), key="date_s")
     
+    # ==========================================
+    # 🔄 BOUTON SYNCHRONISATION WHOOP SÉANCE
+    # ==========================================
+    if st.session_state.get("whoop_token"):
+        if st.button("🔄 Récupérer la dernière séance WHOOP", use_container_width=True):
+            with st.spinner("Recherche du dernier entraînement..."):
+                headers = {"Authorization": f"Bearer {st.session_state['whoop_token']}"}
+                url_workout = "https://api.prod.whoop.com/developer/v1/activity/workout"
+                
+                try:
+                    rep = requests.get(url_workout, headers=headers, params={"limit": 1})
+                    
+                    if rep.status_code == 200:
+                        donnees = rep.json().get("records", [])
+                        if len(donnees) > 0:
+                            derniere_seance = donnees[0]
+                            score = derniere_seance.get("score", {})
+                            
+                            strain = score.get("strain", 0)
+                            hr_avg = score.get("average_heart_rate", 0)
+                            hr_max = score.get("max_heart_rate", 0)
+                            
+                            # Whoop donne l'énergie en kilojoules, on convertit en Calories (1 kJ = 0.239 kcal)
+                            kj = score.get("kilojoule", 0)
+                            calories = round(kj * 0.239006) if kj else 0
+                            
+                            st.session_state['w_strain'] = round(strain, 1)
+                            st.session_state['w_hr_avg'] = hr_avg
+                            st.session_state['w_hr_max'] = hr_max
+                            st.session_state['w_cal'] = calories
+                            
+                            st.success("✅ Entraînement Whoop trouvé et synchronisé !")
+                            
+                            col_ws1, col_ws2, col_ws3, col_ws4 = st.columns(4)
+                            col_ws1.metric("🔥 Strain (Effort)", f"{st.session_state['w_strain']}")
+                            col_ws2.metric("💓 FC Moyenne", f"{st.session_state['w_hr_avg']} bpm")
+                            col_ws3.metric("🚨 FC Max", f"{st.session_state['w_hr_max']} bpm")
+                            col_ws4.metric("⚡ Énergie", f"{st.session_state['w_cal']} kcal")
+                        else:
+                            st.warning("Aucun entraînement récent trouvé sur Whoop.")
+                    else:
+                        st.error(f"Erreur API Whoop : {rep.status_code}")
+                except Exception as e:
+                    st.error(f"Erreur de communication : {e}")
+    st.divider()
+    # ==========================================
+
     col3, col4 = st.columns(2)
     with col3:
         type_seance = st.selectbox("🎾 Type de séance", ["Prépa Physique", "Tennis - Entraînement", "Tennis - Match", "Récupération / Soins"])
@@ -250,17 +297,25 @@ with tab_seance:
     
     if st.button("🔥 Enregistrer la séance", use_container_width=True):
         charge = duree * rpe
+        
+        # Récupération des données Whoop en mémoire
+        whoop_strain = st.session_state.get('w_strain', "Non récupéré")
+        whoop_hr_avg = st.session_state.get('w_hr_avg', "Non récupéré")
+        whoop_hr_max = st.session_state.get('w_hr_max', "Non récupéré")
+        whoop_cal = st.session_state.get('w_cal', "Non récupéré")
+
         dico = {
             'Date': str(date_seance), 'Type': type_seance, 'Duree': duree, 
-            'RPE': rpe, 'Charge': charge, 'Satisfaction': satisfaction
+            'RPE': rpe, 'Charge': charge, 'Satisfaction': satisfaction,
+            'Whoop_Strain': whoop_strain, 'Whoop_HR_avg': whoop_hr_avg, 
+            'Whoop_HR_max': whoop_hr_max, 'Whoop_Calories': whoop_cal
         }
         ajouter_ligne("Seances", dico)
-        st.success(f"📊 Séance validée ! Charge calculée : {charge} unités. Enregistrée !")
+        st.success(f"📊 Séance validée ! Charge calculée : {charge} unités. Enregistrée avec Whoop !")
         
-        if rpe >= 8:
-            alerte_msg = f"⚠️ ALERTE SÉANCE - Raph 🎾\nRPE très élevé : {rpe}/10\nSéance : {type_seance} ({duree} min)\nCharge totale générée : {charge} unités."
-            envoyer_telegram(alerte_msg)
-
+        # --- (Gardez tout votre code des alertes Telegram Z-Score juste en dessous) ---
+        df_s_alerte = pd.concat([df_seances, pd.DataFrame([dico])], ignore_index=True)
+        # ... la suite du code Telegram ...
 # --- ONGLET 3 : BILAN SOIR ---
 with tab_soir:
     st.info("🌙 **Flash Soir :** Dernier bilan avant la récupération nocturne.")
