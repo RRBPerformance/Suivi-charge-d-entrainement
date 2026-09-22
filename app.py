@@ -138,7 +138,7 @@ else:
             f"state=RaphTennis2026"
         )
         
-       st.markdown(f"<h3 style='text-align: center;'><a href='{whoop_auth_url}' target='_blank'>👉 CLIQUEZ ICI POUR VOUS CONNECTER À WHOOP 👈</a></h3>", unsafe_allow_html=True)
+st.markdown(f"<h3 style='text-align: center;'><a href='{whoop_auth_url}' target='_blank'>👉 CLIQUEZ ICI POUR VOUS CONNECTER À WHOOP 👈</a></h3>", unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"Erreur de configuration : {e}")
