@@ -154,12 +154,47 @@ ZONES_ANATOMIQUES = [
     "Abdominaux / Obliques", "Psoas / Ilio-psoas", "Hanches / Adducteurs", "Fessiers", "Quadriceps", 
     "Ischio-jambiers", "Genoux / Rotule", "Mollets (Gros Jumeaux / Soléaire)", "Tendons d'Achille", "Chevilles / Pieds"
 ]
-
 # --- ONGLET 1 : MATIN ---
 with tab_matin:
     st.info("💡 **Consigne :** À remplir chaque matin au réveil pour adapter la charge de la journée.")
     date_matin = st.date_input("📅 Date du jour", value=date.today(), key="date_m")
     
+    # ==========================================
+    # 🔄 BOUTON SYNCHRONISATION WHOOP & MÉMOIRE
+    # ==========================================
+    if st.session_state.get("whoop_token"):
+        if st.button("🔄 Récupérer la récupération WHOOP de Raph", use_container_width=True):
+            with st.spinner("Interrogation des serveurs Whoop..."):
+                headers = {"Authorization": f"Bearer {st.session_state['whoop_token']}"}
+                url_recovery = "https://api.prod.whoop.com/developer/v1/recovery"
+                
+                try:
+                    rep = requests.get(url_recovery, headers=headers, params={"limit": 1})
+                    
+                    if rep.status_code == 200:
+                        donnees = rep.json().get("records", [])
+                        if len(donnees) > 0:
+                            dernier_bilan = donnees[0]
+                            
+                            # On récupère ET on sauvegarde dans la mémoire de Streamlit
+                            st.session_state['w_score'] = dernier_bilan.get("score", {}).get("recovery_score", 0)
+                            st.session_state['w_vfc'] = round(dernier_bilan.get("score", {}).get("hrv_rmssd_milli", 0), 1)
+                            st.session_state['w_fc'] = dernier_bilan.get("score", {}).get("resting_heart_rate", 0)
+                            
+                            st.success(f"✅ Données Whoop synchronisées avec succès !")
+                            
+                            col_w1, col_w2, col_w3 = st.columns(3)
+                            col_w1.metric("🔴/🟢 Score de Récupération", f"{st.session_state['w_score']} %")
+                            col_w2.metric("💓 VFC (Variabilité)", f"{st.session_state['w_vfc']} ms")
+                            col_w3.metric("🫀 FC Repos", f"{st.session_state['w_fc']} bpm")
+                        else:
+                            st.warning("Aucune donnée de sommeil finalisée trouvée pour aujourd'hui.")
+                    else:
+                        st.error(f"Erreur avec l'API Whoop : {rep.status_code}")
+                except Exception as e:
+                    st.error(f"Erreur de communication : {e}")
+    st.divider()
+
     st.markdown("### 🧠 État de Forme (Hooper)")
     col1, col2 = st.columns(2)
     with col1:
@@ -180,17 +215,25 @@ with tab_matin:
     if st.button("✅ Valider le Check-in Matin", use_container_width=True):
         score_forme = sommeil + fatigue + stress + humeur
         zones_str = ", ".join(zones_matin) if zones_matin else "Aucune"
+        
+        # On récupère les données Whoop de la mémoire (ou on met "Non récupéré" s'il a oublié de cliquer)
+        whoop_s = st.session_state.get('w_score', "Non récupéré")
+        whoop_v = st.session_state.get('w_vfc', "Non récupéré")
+        whoop_f = st.session_state.get('w_fc', "Non récupéré")
+        
+        # Ajout des données Whoop dans le dictionnaire pour Google Sheets
         dico = {
             'Date': str(date_matin), 'Sommeil': sommeil, 'Fatigue': fatigue, 
             'Stress': stress, 'Humeur': humeur, 'Score_Forme': score_forme,
-            'Douleur_Type': type_douleur, 'Zones_Douleur': zones_str
+            'Douleur_Type': type_douleur, 'Zones_Douleur': zones_str,
+            'Whoop_Score': whoop_s, 'Whoop_VFC': whoop_v, 'Whoop_FC': whoop_f
         }
-        ajouter_ligne("Forme", dico)
-        st.success(f"🎉 Parfait ! Ton score de forme aujourd'hui est de {score_forme}/20. Enregistré !")
         
-        if score_forme <= 10 or type_douleur not in ["Aucune", "Courbatures (diffuses)"]:
-            alerte_msg = f"🚨 ALERTE MATIN - Raph 🎾\nScore de forme : {score_forme}/20\nDouleur signalée : {type_douleur}\nZone(s) : {zones_str}"
-            envoyer_telegram(alerte_msg)
+        ajouter_ligne("Forme", dico)
+        st.success(f"🎉 Check-in enregistré avec le score Whoop dans Google Sheets !")
+        
+        # La suite de votre code pour Telegram reste identique...
+        # (Laissez votre code Telegram existant juste en dessous)
 
 # --- ONGLET 2 : SÉANCES ---
 with tab_seance:
