@@ -496,6 +496,47 @@ with tab_coach:
             else:
                 st.info("Pas assez de données pour afficher les charges.")
 
+        # --- NOUVELLE SECTION WHOOP ---
+        st.markdown("---")
+        st.markdown("## 🧠 Analyse Avancée : Ressenti (sRPE) vs Réel (WHOOP)")
+        
+        if not df_seances.empty and 'Whoop_Strain' in df_seances.columns:
+            # On filtre pour exclure les séances non synchronisées avec Whoop
+            df_plot = df_seances[pd.to_numeric(df_seances['Whoop_Strain'], errors='coerce').notna()].copy()
+            
+            if not df_plot.empty:
+                df_plot['RPE'] = pd.to_numeric(df_plot['RPE'])
+                df_plot['Whoop_Strain'] = pd.to_numeric(df_plot['Whoop_Strain'])
+                
+                df_plot['Strain (sur 10)'] = (df_plot['Whoop_Strain'] / 21) * 10
+                
+                df_graph = df_plot.set_index('Date').sort_index()
+                
+                st.markdown("#### 📈 Évolution de la difficulté (RPE vs Strain)")
+                st.line_chart(df_graph[['RPE', 'Strain (sur 10)']])
+                
+                df_plot['Ecart'] = df_plot['RPE'] - df_plot['Strain (sur 10)']
+                ecart_moyen = df_plot['Ecart'].mean()
+                
+                col_c1, col_c2, col_c3 = st.columns(3)
+                col_c1.metric("Moyenne RPE (Ressenti)", f"{df_plot['RPE'].mean():.1f} / 10")
+                col_c2.metric("Moyenne Strain (Cardio)", f"{df_plot['Whoop_Strain'].mean():.1f} / 21")
+                
+                if ecart_moyen > 2:
+                    col_c3.metric("Tendance", "Surcharge Nerveuse ⚠️")
+                    st.warning("🚨 **Alerte Coach :** Raph perçoit les séances comme étant beaucoup plus dures que ce que son cœur indique. Son système nerveux central (SNC) est probablement fatigué.")
+                elif ecart_moyen < -2:
+                    col_c3.metric("Tendance", "Sous-évaluation 📉")
+                    st.info("💡 **Info Coach :** Le système cardio travaille très fort, mais Raph trouve la séance facile. C'est souvent un signe d'excellente forme !")
+                else:
+                    col_c3.metric("Tendance", "Cohérence Parfaite ✅")
+                    st.success("🎯 **Info Coach :** Son ressenti correspond exactement au coût physiologique. L'étalonnage interne de Raph est excellent en ce moment.")
+            else:
+                st.info("⏳ Aucune séance avec les données Whoop n'a encore été enregistrée pour pouvoir comparer.")
+        else:
+            st.info("⏳ Les données Whoop s'afficheront ici une fois la première séance synchronisée et enregistrée.")
+
+
         st.markdown("---")
         st.subheader("🌅 Base de données : Forme (Matin)")
         if not df_forme.empty:
