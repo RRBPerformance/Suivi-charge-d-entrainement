@@ -24,10 +24,13 @@ MOT_DE_PASSE_COACH = "RomainRB2004!"
 if "whoop_token" not in st.session_state:
     st.session_state["whoop_token"] = None
 
+# 🛠️ MODE DIAGNOSTIC : Affiche en direct ce que l'URL contient
+st.info(f"🔍 Diagnostic URL - Paramètres détectés : {dict(st.query_params)}")
+
 # --- GESTION DU RETOUR OAUTH WHOOP ---
-query_params = st.query_params
-if "code" in query_params and not st.session_state["whoop_token"]:
-    auth_code = query_params["code"]
+if "code" in st.query_params and not st.session_state["whoop_token"]:
+    st.warning("⚠️ Un code Whoop a été détecté ! Tentative de connexion en cours...")
+    auth_code = st.query_params["code"]
     token_url = "https://api.prod.whoop.com/oauth/oauth2/token"
     payload = {
         "grant_type": "authorization_code",
@@ -38,15 +41,19 @@ if "code" in query_params and not st.session_state["whoop_token"]:
     }
     try:
         response = requests.post(token_url, data=payload)
+        
+        # On affiche crûment la réponse de Whoop pour voir ce qui bloque
+        st.write(f"📩 Réponse de Whoop (Code HTTP) : {response.status_code}")
+        st.write(f"📝 Détail du message Whoop : {response.text}")
+        
         if response.status_code == 200:
             st.session_state["whoop_token"] = response.json().get("access_token")
-            st.success("✅ Connecté à Whoop avec succès ! Vos données vont se synchroniser.")
-            st.query_params.clear()
-            st.rerun()
+            st.success("✅ Connecté à Whoop avec succès ! (Le jeton est validé)")
+            # On a retiré le st.rerun() pour que vous ayez le temps de lire ce qui s'affiche !
         else:
-            st.error(f"Erreur lors de l'échange du token Whoop : {response.text}")
+            st.error("❌ ÉCHEC : Whoop a refusé l'échange du code. Vérifiez votre WHOOP_CLIENT_SECRET et votre WHOOP_REDIRECT_URI dans les secrets de Streamlit.")
     except Exception as e:
-        st.error(f"Erreur de connexion Whoop : {e}")
+        st.error(f"Erreur technique de connexion : {e}")
 
 # --- FONCTION TELEGRAM ---
 def envoyer_telegram(message):
