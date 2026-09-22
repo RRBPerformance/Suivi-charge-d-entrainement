@@ -20,6 +20,7 @@ st.set_page_config(page_title="Suivi de Charge RRB", page_icon="🎾", layout="w
 # Mot de passe sécurisé
 MOT_DE_PASSE_COACH = "RomainRB2004!"
 
+
 # --- INITIALISATION DE LA SESSION WHOOP ---
 if "whoop_token" not in st.session_state:
     st.session_state["whoop_token"] = None
@@ -118,31 +119,31 @@ st.markdown("<p style='text-align: center; color: #6B7280;'>Monitoring quotidien
 st.divider()
 
 # --- BOUTON DE CONNEXION WHOOP ---
-if st.session_state["whoop_token"]:
+if st.session_state.get("whoop_token"):
     st.success("🟢 Compte Whoop connecté et actif !")
 else:
     try:
+        import urllib.parse
         client_id = st.secrets["WHOOP_CLIENT_ID"]
         redirect_uri = st.secrets["WHOOP_REDIRECT_URI"]
         scope_str = "read:recovery read:cycles read:sleep read:workout"
         
+        # Ajout du paramètre "state" obligatoire (au moins 8 caractères)
         whoop_auth_url = (
             f"https://api.prod.whoop.com/oauth/oauth2/auth?"
             f"client_id={client_id}&"
             f"redirect_uri={urllib.parse.quote(redirect_uri)}&"
             f"response_type=code&"
-            f"scope={urllib.parse.quote(scope_str)}"
+            f"scope={urllib.parse.quote(scope_str)}&"
+            f"state=RaphTennis2026"
         )
         
-        # Un vrai lien cliquable au lieu d'un bouton capricieux
         st.markdown(f"<h3 style='text-align: center;'><a href='{whoop_auth_url}' target='_self'>👉 CLIQUEZ ICI POUR VOUS CONNECTER À WHOOP 👈</a></h3>", unsafe_allow_html=True)
-        
-        # Pour le débogage : on affiche le lien en clair
-        with st.expander("🛠️ Afficher le lien brut de connexion"):
-            st.code(whoop_auth_url)
             
     except Exception as e:
-        st.error(f"Il manque une information dans les secrets Whoop : {e}")
+        st.error(f"Erreur de configuration : {e}")
+            
+   
 
 st.divider()
 
