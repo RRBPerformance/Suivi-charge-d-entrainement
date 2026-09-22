@@ -208,10 +208,10 @@ with tab_seance:
         if st.button("🔄 Synchroniser ma montre", type="primary", use_container_width=True):
             st.session_state['whoop_synced'] = True
             st.session_state['sans_montre'] = False
-            # Simulation des données WHOOP (à remplacer par le vrai retour API)
-            st.session_state['whoop_strain'] = 12.5  
-            st.session_state['whoop_duree'] = 90     
-            st.session_state['whoop_type'] = "Tennis"
+            # Simulation (ou appel API réel)
+            st.session_state['whoop_strain'] = 14.2  
+            st.session_state['whoop_duree'] = 120     
+            st.session_state['whoop_type'] = "Tennis (Après-midi)"  # Ce que WHOOP a sorti par erreur
             st.success("✅ Données WHOOP importées avec succès !")
             
     with col_btn2:
@@ -221,45 +221,46 @@ with tab_seance:
 
     if st.session_state.get('whoop_synced') or st.session_state.get('sans_montre'):
         st.markdown("---")
-        st.markdown("### 🧠 2. Ton Ressenti (Subjectif)")
+        st.markdown("### 🧠 2. Ton Ressenti & Corrections")
         
         date_seance = st.date_input("📅 Date de la séance", value=date.today(), key="date_s")
         
         # --- MODE SANS MONTRE ---
         if st.session_state.get('sans_montre'):
-            st.warning("⚠️ Mode manuel activé : Tu dois renseigner le type et la durée toi-même.")
+            st.warning("⚠️ Mode manuel activé.")
             col_m1, col_m2 = st.columns(2)
             with col_m1:
-                type_final = st.selectbox("Type de séance", ["Échauffement Pré-Match", "Prépa Physique", "Tennis", "Récupération", "Match"])
+                type_final = st.selectbox("Type de séance", ["Échauffement Pré-Match", "Prépa Physique", "Tennis - Entraînement", "Tennis - Match", "Récupération"])
             with col_m2:
-                duree_finale = st.number_input("Durée (minutes)", min_value=1, value=60)
+                duree_finale = st.number_input("Durée (minutes)", min_value=1, value=90)
             strain_final = 0.0 
             
-        # --- MODE AVEC MONTRE ---
+        # --- MODE AVEC MONTRE (AVEC CORRECTION MANUELLE DISPO) ---
         else:
+            st.info("💡 Si WHOOP s'est trompé de séance (ex: affichage de l'après-midi au lieu du soir), corrige directement ci-dessous :")
+            
             col_w1, col_w2, col_w3 = st.columns(3)
             with col_w1:
-                st.metric("Activité détectée", st.session_state['whoop_type'])
+                st.metric("Activité brute WHOOP", st.session_state['whoop_type'])
             with col_w2:
-                st.metric("Durée (min)", st.session_state['whoop_duree'])
+                duree_finale = st.number_input("Corriger la durée (min)", min_value=1, value=int(st.session_state['whoop_duree']))
             with col_w3:
-                st.metric("Score d'Effort", f"{st.session_state['whoop_strain']} / 21")
+                st.metric("Score d'Effort (Strain)", f"{st.session_state['whoop_strain']} / 21")
                 
-            # WHOOP a donné l'activité, mais on affine pour le coach (Match, Entraînement, Échauffement...)
-            type_final = st.selectbox("Préciser la nature de la séance (basé sur WHOOP)", [
-                "Tennis - Entraînement", 
+            # Menu pour forcer la vraie nature de la séance (Match du soir, etc.)
+            type_final = st.selectbox("🎯 Définir la vraie nature de la séance :", [
                 "Tennis - Match", 
+                "Tennis - Entraînement", 
                 "Échauffement Pré-Match", 
                 "Prépa Physique", 
                 "Récupération"
-            ])
+            ], index=0) # Mis sur Match par défaut pour y accéder vite
             
-            duree_finale = st.session_state['whoop_duree']
             strain_final = st.session_state['whoop_strain']
 
         col3, col4 = st.columns(2)
         with col3:
-            rpe = st.slider("🥵 Difficulté ressentie (RPE 1-10)", 1, 10, 5)
+            rpe = st.slider("🥵 Difficulté ressentie (RPE 1-10)", 1, 10, 7)
         with col4:
             satisfaction = st.slider("🎯 Satisfaction (1-5)", 1, 5, 3)
             
@@ -271,13 +272,11 @@ with tab_seance:
             ecart = rpe - strain_sur_10
             
             if ecart >= 3:
-                st.warning("⚠️ **Alerte Fatigue Nerveuse :** Tu as ressenti cette séance comme très dure par rapport à l'impact cardio.")
+                st.warning("⚠️ **Alerte Fatigue Nerveuse :** Ressenti très dur par rapport à l'impact cardio.")
             elif ecart <= -3:
-                st.warning("⚠️ **Alerte Surcharge :** La séance t'a paru facile, mais ton organisme a pris un gros impact cardio.")
+                st.warning("⚠️ **Alerte Surcharge :** Séance parue facile, mais gros impact cardio.")
             else:
-                st.success("✅ **Cohérence parfaite :** Ton ressenti correspond à la dépense mesurée.")
-        else:
-            st.info("💡 L'analyse croisée avec ton rythme cardiaque n'est pas disponible sans la montre.")
+                st.success("✅ **Cohérence parfaite.**")
 
         if st.button("🔥 Enregistrer la séance", use_container_width=True):
             dico_seance = {
@@ -289,7 +288,7 @@ with tab_seance:
                 'Satisfaction': satisfaction
             }
             ajouter_ligne("Seances", dico_seance)
-            st.success(f"📊 Séance validée ! Charge : {charge}.")
+            st.success(f"📊 Séance validée ! Type : {type_final} | Charge : {charge}.")
             
             st.session_state.pop('whoop_synced', None)
             st.session_state.pop('sans_montre', None)
