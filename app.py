@@ -127,11 +127,15 @@ else:
             f"scope={urllib.parse.quote(scope_str)}"
         )
         
-        col_w1, col_w2, col_w3 = st.columns([1, 2, 1])
-        with col_w2:
-            st.link_button("🔗 Se connecter avec WHOOP", whoop_auth_url, use_container_width=True)
-    except Exception:
-        st.info("Configuration Whoop en cours de finalisation...")
+        # Un vrai lien cliquable au lieu d'un bouton capricieux
+        st.markdown(f"<h3 style='text-align: center;'><a href='{whoop_auth_url}' target='_self'>👉 CLIQUEZ ICI POUR VOUS CONNECTER À WHOOP 👈</a></h3>", unsafe_allow_html=True)
+        
+        # Pour le débogage : on affiche le lien en clair
+        with st.expander("🛠️ Afficher le lien brut de connexion"):
+            st.code(whoop_auth_url)
+            
+    except Exception as e:
+        st.error(f"Il manque une information dans les secrets Whoop : {e}")
 
 st.divider()
 
