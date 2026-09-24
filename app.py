@@ -155,9 +155,84 @@ ZONES_ANATOMIQUES = [
     "Ischio-jambiers", "Genoux / Rotule", "Mollets (Gros Jumeaux / Soléaire)", "Tendons d'Achille", "Chevilles / Pieds"
 ]
 # --- ONGLET 1 : MATIN ---
+# --- ONGLET 1 : MATIN ---
 with tab_matin:
     st.info("💡 **Consigne :** À remplir chaque matin au réveil pour adapter la charge de la journée.")
+    
+    # --- MÉCANIQUE WHOOP COMPLÈTE ---
+    import urllib.parse
+    import requests
+    
+    client_id = st.secrets["WHOOP_CLIENT_ID"]
+    client_secret = st.secrets["WHOOP_CLIENT_SECRET"]
+    redirect_uri = "https://suivi-charge-rrb.streamlit.app/"
+    
+    # 1. Capture et nettoyage du code Whoop
+    if "code" in st.query_params:
+        code_auth = st.query_params["code"]
+        st.query_params.clear() 
+        
+        token_url = "https://api.prod.whoop.com/oauth/oauth2/token"
+        payload = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "grant_type": "authorization_code",
+            "code": code_auth,
+            "redirect_uri": redirect_uri
+        }
+        rep = requests.post(token_url, data=payload)
+        
+        if rep.status_code == 200:
+            st.session_state['whoop_token'] = rep.json()['access_token']
+            st.success("✅ Connexion Whoop réussie !")
+        else:
+            st.error("❌ Le code a expiré. Reconnectez-vous.")
+
+    # 2. Affichage (Bouton de connexion OU Bouton de téléchargement des données)
+    if 'whoop_token' not in st.session_state:
+        scope_str = "read:recovery read:cycles read:sleep read:workout"
+        whoop_auth_url = (
+            f"https://api.prod.whoop.com/oauth/oauth2/auth?"
+            f"client_id={client_id}&"
+            f"redirect_uri={urllib.parse.quote(redirect_uri)}&"
+            f"response_type=code&"
+            f"scope={urllib.parse.quote(scope_str)}&"
+            f"state=RaphTennis2026"
+        )
+        st.markdown(f"<h3 style='text-align: center;'><a href='{whoop_auth_url}' target='_self'>👉 CLIQUEZ ICI POUR VOUS CONNECTER À WHOOP 👈</a></h3>", unsafe_allow_html=True)
+    
+    else:
+        st.success("🟢 Compte Whoop connecté et actif !")
+        
+        if st.button("🔄 Récupérer la récupération WHOOP de Raph", use_container_width=True):
+            with st.spinner("Interrogation des serveurs Whoop..."):
+                headers = {"Authorization": f"Bearer {st.session_state['whoop_token']}"}
+                url_recovery = "https://api.prod.whoop.com/developer/v1/recovery"
+                
+                try:
+                    rep_recov = requests.get(url_recovery, headers=headers, params={"limit": 1})
+                    
+                    if rep_recov.status_code == 200:
+                        donnees = rep_recov.json().get("records", [])
+                        if len(donnees) > 0:
+                            dernier_bilan = donnees[0]
+                            st.session_state['w_score'] = dernier_bilan.get("score", {}).get("recovery_score", 0)
+                            st.session_state['w_vfc'] = round(dernier_bilan.get("score", {}).get("hrv_rmssd_milli", 0), 1)
+                            st.session_state['w_fc'] = dernier_bilan.get("score", {}).get("resting_heart_rate", 0)
+                            st.success("✅ Données Whoop synchronisées avec succès !")
+                        else:
+                            st.warning("⚠️ Aucune donnée pour aujourd'hui.")
+                    else:
+                        st.error(f"❌ Erreur Whoop {rep_recov.status_code} : {rep_recov.text}")
+                except Exception as e:
+                    st.error(f"❌ Erreur technique Python : {e}")
+
+    # --- FIN DE LA MÉCANIQUE WHOOP ---
+
+    # --- SUITE DU FORMULAIRE MATIN ---
     date_matin = st.date_input("📅 Date du jour", value=date.today(), key="date_m")
+    
+    # (Laissez le reste de votre code intact en dessous)
     
     # ==========================================
     # 🔄 BOUTON SYNCHRONISATION WHOOP & MÉMOIRE
