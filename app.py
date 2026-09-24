@@ -168,13 +168,18 @@ with tab_matin:
                             col_w1.metric("🔴/🟢 Score de Récupération", f"{st.session_state['w_score']} %")
                             col_w2.metric("💓 VFC (Variabilité)", f"{st.session_state['w_vfc']} ms")
                             col_w3.metric("🫀 FC Repos", f"{st.session_state['w_fc']} bpm")
-                        else:
+                       else:
                             st.warning("Aucune donnée de sommeil finalisée trouvée pour aujourd'hui.")
+                            
+                    elif rep.status_code == 401:
+                        # 🧹 LE RÉFLEXE ANTI-BUG : Si le jeton est périmé, on l'efface et on relance !
+                        st.session_state["whoop_token"] = None
+                        st.warning("⏱️ La session Whoop a expiré. Rechargement en cours...")
+                        st.rerun()
+                        
                     else:
                         st.error(f"Erreur avec l'API Whoop : {rep.status_code}")
                 except Exception as e:
-                    st.error(f"Erreur de communication : {e}")
-
     st.divider()
 
     # 2. Formulaire Hooper
