@@ -6,6 +6,9 @@ Created on Tue Sep  8 14:27:14 2026
 @author: romainromeyerbouchard
 """
 
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import streamlit as st
 import pandas as pd
 from datetime import date
@@ -20,17 +23,12 @@ st.set_page_config(page_title="Suivi de Charge RRB", page_icon="🎾", layout="w
 # Mot de passe sécurisé
 MOT_DE_PASSE_COACH = "RomainRB2004!"
 
-
 # --- INITIALISATION DE LA SESSION WHOOP ---
 if "whoop_token" not in st.session_state:
     st.session_state["whoop_token"] = None
 
-# 🛠️ MODE DIAGNOSTIC : Affiche en direct ce que l'URL contient
-st.info(f"🔍 Diagnostic URL - Paramètres détectés : {dict(st.query_params)}")
-
 # --- GESTION DU RETOUR OAUTH WHOOP ---
 if "code" in st.query_params and not st.session_state["whoop_token"]:
-    st.warning("⚠️ Un code Whoop a été détecté ! Tentative de connexion en cours...")
     auth_code = st.query_params["code"]
     token_url = "https://api.prod.whoop.com/oauth/oauth2/token"
     payload = {
@@ -43,16 +41,12 @@ if "code" in st.query_params and not st.session_state["whoop_token"]:
     try:
         response = requests.post(token_url, data=payload)
         
-        # On affiche crûment la réponse de Whoop pour voir ce qui bloque
-        st.write(f"📩 Réponse de Whoop (Code HTTP) : {response.status_code}")
-        st.write(f"📝 Détail du message Whoop : {response.text}")
-        
         if response.status_code == 200:
             st.session_state["whoop_token"] = response.json().get("access_token")
+            st.query_params.clear() 
             st.success("✅ Connecté à Whoop avec succès ! (Le jeton est validé)")
-            # On a retiré le st.rerun() pour que vous ayez le temps de lire ce qui s'affiche !
         else:
-            st.error("❌ ÉCHEC : Whoop a refusé l'échange du code. Vérifiez votre WHOOP_CLIENT_SECRET et votre WHOOP_REDIRECT_URI dans les secrets de Streamlit.")
+            st.error("❌ ÉCHEC : Whoop a refusé l'échange du code. Vérifiez vos identifiants.")
     except Exception as e:
         st.error(f"Erreur technique de connexion : {e}")
 
@@ -118,78 +112,23 @@ st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Raph Tennis : 
 st.markdown("<p style='text-align: center; color: #6B7280;'>Monitoring quotidien - Optimisation et Prévention</p>", unsafe_allow_html=True)
 st.divider()
 
-# --- BOUTON DE CONNEXION WHOOP ---
-if st.session_state.get("whoop_token"):
-    st.success("🟢 Compte Whoop connecté et actif !")
-else:
-    try:
-        import urllib.parse
-        client_id = st.secrets["WHOOP_CLIENT_ID"]
-        redirect_uri = st.secrets["WHOOP_REDIRECT_URI"]
-        scope_str = "read:recovery read:cycles read:sleep read:workout"
-        
-        # Ajout du paramètre "state" obligatoire (au moins 8 caractères)
-        whoop_auth_url = (
-            f"https://api.prod.whoop.com/oauth/oauth2/auth?"
-            f"client_id={client_id}&"
-            f"redirect_uri={urllib.parse.quote(redirect_uri)}&"
-            f"response_type=code&"
-            f"scope={urllib.parse.quote(scope_str)}&"
-            f"state=RaphTennis2026"
-        )
-        st.markdown(f"<h3 style='text-align: center;'><a href='{whoop_auth_url}' target='_blank'>👉 CLIQUEZ ICI POUR VOUS CONNECTER À WHOOP 👈</a></h3>", unsafe_allow_html=True)
-
-    except Exception as e:
-        st.error(f"Erreur de configuration : {e}")
-            
-   
-
-st.divider()
-
-tab_matin, tab_seance, tab_soir, tab_coach = st.tabs(["🌅 Check-in Matin", "👟 Bilan Séance", "🌙 Flash Soir", "🔐 Espace Coach"])
-
 ZONES_ANATOMIQUES = [
     "Tête / Mâchoire", "Cervicales / Cou", "Trapèzes", "Épaules", "Biceps", "Triceps", "Coudes", 
     "Avant-bras / Poignets / Mains", "Pectoraux", "Dorsaux / Grand dorsal", "Lombaires / Bas du dos", 
     "Abdominaux / Obliques", "Psoas / Ilio-psoas", "Hanches / Adducteurs", "Fessiers", "Quadriceps", 
     "Ischio-jambiers", "Genoux / Rotule", "Mollets (Gros Jumeaux / Soléaire)", "Tendons d'Achille", "Chevilles / Pieds"
 ]
-# --- ONGLET 1 : MATIN ---
+
+tab_matin, tab_seance, tab_soir, tab_coach = st.tabs(["🌅 Check-in Matin", "👟 Bilan Séance", "🌙 Flash Soir", "🔐 Espace Coach"])
+
 # --- ONGLET 1 : MATIN ---
 with tab_matin:
     st.info("💡 **Consigne :** À remplir chaque matin au réveil pour adapter la charge de la journée.")
     
-    # --- MÉCANIQUE WHOOP COMPLÈTE ---
-    import urllib.parse
-    import requests
-    
-    client_id = st.secrets["WHOOP_CLIENT_ID"]
-    client_secret = st.secrets["WHOOP_CLIENT_SECRET"]
-    redirect_uri = "https://suivi-charge-rrb.streamlit.app/"
-    
-    # 1. Capture et nettoyage du code Whoop
-    if "code" in st.query_params:
-        code_auth = st.query_params["code"]
-        st.query_params.clear() 
-        
-        token_url = "https://api.prod.whoop.com/oauth/oauth2/token"
-        payload = {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "grant_type": "authorization_code",
-            "code": code_auth,
-            "redirect_uri": redirect_uri
-        }
-        rep = requests.post(token_url, data=payload)
-        
-        if rep.status_code == 200:
-            st.session_state['whoop_token'] = rep.json()['access_token']
-            st.success("✅ Connexion Whoop réussie !")
-        else:
-            st.error("❌ Le code a expiré. Reconnectez-vous.")
-
-    # 2. Affichage (Bouton de connexion OU Bouton de téléchargement des données)
+    # 1. Gestion de la connexion Whoop
     if 'whoop_token' not in st.session_state:
+        client_id = st.secrets["WHOOP_CLIENT_ID"]
+        redirect_uri = "https://suivi-charge-rrb.streamlit.app/"
         scope_str = "read:recovery read:cycles read:sleep read:workout"
         whoop_auth_url = (
             f"https://api.prod.whoop.com/oauth/oauth2/auth?"
@@ -204,41 +143,8 @@ with tab_matin:
     else:
         st.success("🟢 Compte Whoop connecté et actif !")
         
-        if st.button("🔄 Récupérer la récupération WHOOP de Raph", use_container_width=True):
-            with st.spinner("Interrogation des serveurs Whoop..."):
-                headers = {"Authorization": f"Bearer {st.session_state['whoop_token']}"}
-                url_recovery = "https://api.prod.whoop.com/developer/v1/recovery"
-                
-                try:
-                    rep_recov = requests.get(url_recovery, headers=headers, params={"limit": 1})
-                    
-                    if rep_recov.status_code == 200:
-                        donnees = rep_recov.json().get("records", [])
-                        if len(donnees) > 0:
-                            dernier_bilan = donnees[0]
-                            st.session_state['w_score'] = dernier_bilan.get("score", {}).get("recovery_score", 0)
-                            st.session_state['w_vfc'] = round(dernier_bilan.get("score", {}).get("hrv_rmssd_milli", 0), 1)
-                            st.session_state['w_fc'] = dernier_bilan.get("score", {}).get("resting_heart_rate", 0)
-                            st.success("✅ Données Whoop synchronisées avec succès !")
-                        else:
-                            st.warning("⚠️ Aucune donnée pour aujourd'hui.")
-                    else:
-                        st.error(f"❌ Erreur Whoop {rep_recov.status_code} : {rep_recov.text}")
-                except Exception as e:
-                    st.error(f"❌ Erreur technique Python : {e}")
-
-    # --- FIN DE LA MÉCANIQUE WHOOP ---
-
-    # --- SUITE DU FORMULAIRE MATIN ---
-    date_matin = st.date_input("📅 Date du jour", value=date.today(), key="date_m")
-    
-    # (Laissez le reste de votre code intact en dessous)
-    
-    # ==========================================
-    # 🔄 BOUTON SYNCHRONISATION WHOOP & MÉMOIRE
-    # ==========================================
-    if st.session_state.get("whoop_token"):
-       if st.button("🔄 Récupérer la récupération WHOOP de Raph", use_container_width=True, key="btn_whoop_matin"):
+        # Bouton unique de récupération
+        if st.button("🔄 Récupérer la récupération WHOOP de Raph", use_container_width=True, key="btn_whoop_matin"):
             with st.spinner("Interrogation des serveurs Whoop..."):
                 headers = {"Authorization": f"Bearer {st.session_state['whoop_token']}"}
                 url_recovery = "https://api.prod.whoop.com/developer/v1/recovery"
@@ -251,7 +157,7 @@ with tab_matin:
                         if len(donnees) > 0:
                             dernier_bilan = donnees[0]
                             
-                            # On récupère ET on sauvegarde dans la mémoire de Streamlit
+                            # On sauvegarde dans la mémoire
                             st.session_state['w_score'] = dernier_bilan.get("score", {}).get("recovery_score", 0)
                             st.session_state['w_vfc'] = round(dernier_bilan.get("score", {}).get("hrv_rmssd_milli", 0), 1)
                             st.session_state['w_fc'] = dernier_bilan.get("score", {}).get("resting_heart_rate", 0)
@@ -268,8 +174,12 @@ with tab_matin:
                         st.error(f"Erreur avec l'API Whoop : {rep.status_code}")
                 except Exception as e:
                     st.error(f"Erreur de communication : {e}")
+
     st.divider()
 
+    # 2. Formulaire Hooper
+    date_matin = st.date_input("📅 Date du jour", value=date.today(), key="date_m")
+    
     st.markdown("### 🧠 État de Forme (Hooper)")
     col1, col2 = st.columns(2)
     with col1:
@@ -287,16 +197,15 @@ with tab_matin:
         "Neurologique (fourmillements)", "Courbatures (diffuses)", "Maladie (grippe, gastro...)", "Crampes"
     ], key="type_m")
     
+    # 3. Validation et envoi vers Google Sheets
     if st.button("✅ Valider le Check-in Matin", use_container_width=True):
         score_forme = sommeil + fatigue + stress + humeur
         zones_str = ", ".join(zones_matin) if zones_matin else "Aucune"
         
-        # On récupère les données Whoop de la mémoire (ou on met "Non récupéré" s'il a oublié de cliquer)
         whoop_s = st.session_state.get('w_score', "Non récupéré")
         whoop_v = st.session_state.get('w_vfc', "Non récupéré")
         whoop_f = st.session_state.get('w_fc', "Non récupéré")
         
-        # Ajout des données Whoop dans le dictionnaire pour Google Sheets
         dico = {
             'Date': str(date_matin), 'Sommeil': sommeil, 'Fatigue': fatigue, 
             'Stress': stress, 'Humeur': humeur, 'Score_Forme': score_forme,
@@ -306,18 +215,12 @@ with tab_matin:
         
         ajouter_ligne("Forme", dico)
         st.success(f"🎉 Check-in enregistré avec le score Whoop dans Google Sheets !")
-        
-        # La suite de votre code pour Telegram reste identique...
-        # (Laissez votre code Telegram existant juste en dessous)
 
 # --- ONGLET 2 : SÉANCES ---
 with tab_seance:
     st.warning("⏱️ **Rappel :** À remplir dans les 30 minutes suivant la fin de l'effort pour une donnée sRPE fiable.")
     date_seance = st.date_input("📅 Date de la séance", value=date.today(), key="date_s")
     
-    # ==========================================
-    # 🔄 BOUTON SYNCHRONISATION WHOOP SÉANCE
-    # ==========================================
     if st.session_state.get("whoop_token"):
         if st.button("🔄 Récupérer la dernière séance WHOOP", use_container_width=True):
             with st.spinner("Recherche du dernier entraînement..."):
@@ -337,7 +240,6 @@ with tab_seance:
                             hr_avg = score.get("average_heart_rate", 0)
                             hr_max = score.get("max_heart_rate", 0)
                             
-                            # Whoop donne l'énergie en kilojoules, on convertit en Calories (1 kJ = 0.239 kcal)
                             kj = score.get("kilojoule", 0)
                             calories = round(kj * 0.239006) if kj else 0
                             
@@ -360,7 +262,6 @@ with tab_seance:
                 except Exception as e:
                     st.error(f"Erreur de communication : {e}")
     st.divider()
-    # ==========================================
 
     col3, col4 = st.columns(2)
     with col3:
@@ -373,7 +274,6 @@ with tab_seance:
     if st.button("🔥 Enregistrer la séance", use_container_width=True):
         charge = duree * rpe
         
-        # Récupération des données Whoop en mémoire
         whoop_strain = st.session_state.get('w_strain', "Non récupéré")
         whoop_hr_avg = st.session_state.get('w_hr_avg', "Non récupéré")
         whoop_hr_max = st.session_state.get('w_hr_max', "Non récupéré")
@@ -387,10 +287,7 @@ with tab_seance:
         }
         ajouter_ligne("Seances", dico)
         st.success(f"📊 Séance validée ! Charge calculée : {charge} unités. Enregistrée avec Whoop !")
-        
-        # --- (Gardez tout votre code des alertes Telegram Z-Score juste en dessous) ---
-        df_s_alerte = pd.concat([df_seances, pd.DataFrame([dico])], ignore_index=True)
-        # ... la suite du code Telegram ...
+
 # --- ONGLET 3 : BILAN SOIR ---
 with tab_soir:
     st.info("🌙 **Flash Soir :** Dernier bilan avant la récupération nocturne.")
@@ -571,12 +468,10 @@ with tab_coach:
             else:
                 st.info("Pas assez de données pour afficher les charges.")
 
-        # --- NOUVELLE SECTION WHOOP ---
         st.markdown("---")
         st.markdown("## 🧠 Analyse Avancée : Ressenti (sRPE) vs Réel (WHOOP)")
         
         if not df_seances.empty and 'Whoop_Strain' in df_seances.columns:
-            # On filtre pour exclure les séances non synchronisées avec Whoop
             df_plot = df_seances[pd.to_numeric(df_seances['Whoop_Strain'], errors='coerce').notna()].copy()
             
             if not df_plot.empty:
@@ -610,7 +505,6 @@ with tab_coach:
                 st.info("⏳ Aucune séance avec les données Whoop n'a encore été enregistrée pour pouvoir comparer.")
         else:
             st.info("⏳ Les données Whoop s'afficheront ici une fois la première séance synchronisée et enregistrée.")
-
 
         st.markdown("---")
         st.subheader("🌅 Base de données : Forme (Matin)")
