@@ -1,17 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Sep  8 14:27:14 2026
-
-@author: romainromeyerbouchard
-"""
-
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import streamlit as st
 import pandas as pd
 from datetime import date
@@ -49,7 +35,7 @@ def init_connection():
     sheet = client.open("RaphSuivi_Tennis_Database")
     return sheet
 
-# OPTIMISATION : Mise en cache des données pour éviter de saturer l'API Google
+# OPTIMISATION : Mise en cache des données
 @st.cache_data(ttl=600)
 def charger_donnees():
     try:
@@ -75,9 +61,7 @@ def ajouter_ligne(onglet_nom, dico_donnees):
     try:
         sh = init_connection()
         worksheet = sh.worksheet(onglet_nom)
-        # On écrit directement sans faire de requête de lecture préalable
         worksheet.append_row(list(dico_donnees.values()))
-        # On vide la mémoire cache pour que les graphiques se mettent à jour
         st.cache_data.clear()
     except Exception as e:
         st.error(f"Erreur d'enregistrement Google Sheets : {e}")
@@ -87,7 +71,6 @@ def supprimer_ligne_gsheets(onglet_nom, index_ligne):
         sh = init_connection()
         worksheet = sh.worksheet(onglet_nom)
         worksheet.delete_rows(index_ligne + 2)
-        # On vide la mémoire cache pour actualiser la page
         st.cache_data.clear()
     except Exception as e:
         st.error(f"Erreur lors de la suppression : {e}")
@@ -97,7 +80,6 @@ st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Raph Tennis : 
 st.markdown("<p style='text-align: center; color: #6B7280;'>Monitoring quotidien - Optimisation et Prévention</p>", unsafe_allow_html=True)
 st.divider()
 
-# Chargement global des données (désormais protégé par le cache)
 df_forme, df_seances, df_soir, df_tests = charger_donnees()
 
 tab_matin, tab_seance, tab_soir, tab_coach = st.tabs(["🌅 Check-in Matin", "👟 Bilan Séance", "🌙 Flash Soir", "🔐 Espace Coach"])
@@ -108,210 +90,141 @@ ZONES_ANATOMIQUES = [
     "Abdominaux / Obliques", "Psoas / Ilio-psoas", "Hanches / Adducteurs", "Fessiers", "Quadriceps", 
     "Ischio-jambiers", "Genoux / Rotule", "Mollets (Gros Jumeaux / Soléaire)", "Tendons d'Achille", "Chevilles / Pieds"
 ]
+
 # --- ONGLET 1 : MATIN ---
 with tab_matin:
     st.info("💡 **Consigne :** À remplir chaque matin au réveil pour adapter la charge de la journée.")
     
-    st.markdown("### 📡 1. Données de Récupération (Objectif)")
+    st.markdown("### 📡 1. Données WHOOP (Saisie Manuelle)")
+    st.caption("Recopie les informations affichées sur l'application WHOOP de ton téléphone (laisse à 0 si pas de montre).")
     
-    # Deux boutons côte à côte pour le matin
-    col_btn_m1, col_btn_m2 = st.columns(2)
-    with col_btn_m1:
-        if st.button("🔄 Synchroniser mon sommeil WHOOP", type="primary", use_container_width=True, key="btn_whoop_matin"):
-            st.session_state['whoop_matin_synced'] = True
-            st.session_state['sans_montre_matin'] = False
-            # Simulation des données WHOOP du matin
-            st.session_state['whoop_recup'] = 82     # % Récupération (Souvent Vert au-dessus de 66%)
-            st.session_state['whoop_sommeil'] = 95   # % Sommeil
-            st.session_state['whoop_vfc'] = 75       # VFC (HRV) en ms
-            st.success("✅ Données WHOOP importées avec succès !")
+    col_w1, col_w2 = st.columns(2)
+    with col_w1:
+        whoop_recup = st.number_input("🔴/🟢 Score de Récupération (%)", min_value=0, max_value=100, value=0)
+        whoop_sommeil = st.number_input("💤 Performance Sommeil (%)", min_value=0, max_value=100, value=0)
+    with col_w2:
+        whoop_vfc = st.number_input("💓 VFC (Variabilité en ms)", min_value=0, value=0)
+        whoop_fc = st.number_input("🫀 FC Repos (bpm)", min_value=0, value=0)
+        
+    st.markdown("---")
+    st.markdown("### 🧠 2. Ton Ressenti (Subjectif)")
+    
+    date_matin = st.date_input("📅 Date du jour", value=date.today(), key="date_m")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        sommeil = st.slider("💤 Qualité du sommeil ressentie (1=Mauvais, 5=Parfait)", 1, 5, 3)
+        fatigue = st.slider("🔋 Niveau de fraîcheur (1=Épuisé, 5=Frais)", 1, 5, 3)
+    with col2:
+        stress = st.slider("🌪️ Niveau de stress (1=Très stressé, 5=Zen)", 1, 5, 3)
+        humeur = st.slider("😊 Humeur (1=Mauvaise, 5=Excellente)", 1, 5, 3)
+        
+    st.markdown("### 🩺 Point Clinique Matinal")
+    zones_matin = st.multiselect("📍 Localisation(s) de la douleur ou gêne :", ZONES_ANATOMIQUES, key="zones_m")
+    type_douleur = st.selectbox("⚡ Quel est le type de douleur ?", [
+        "Aucune", "Musculaire (déchirure, élongation)", "Articulaire (blocage, instabilité)", 
+        "Tendineuse (progressive à l'effort)", "Osseuse (profonde)", "Ligamentaire (torsion)", 
+        "Neurologique (fourmillements)", "Courbatures (diffuses)", "Maladie (grippe, gastro...)", "Crampes"
+    ], key="type_m")
+    
+    if st.button("✅ Valider le Check-in Matin", use_container_width=True):
+        score_forme = sommeil + fatigue + stress + humeur
+        zones_str = ", ".join(zones_matin) if zones_matin else "Aucune"
+        
+        dico = {
+            'Date': str(date_matin), 'Sommeil': sommeil, 'Fatigue': fatigue, 
+            'Stress': stress, 'Humeur': humeur, 'Score_Forme': score_forme,
+            'Douleur_Type': type_douleur, 'Zones_Douleur': zones_str,
+            'Whoop_Score': whoop_recup, 'Whoop_VFC': whoop_vfc, 'Whoop_FC': whoop_fc
+        }
+        
+        ajouter_ligne("Forme", dico)
+        st.success(f"🎉 Parfait ! Ton score de forme aujourd'hui est de {score_forme}/20. Enregistré !")
+        
+        # Alertes Telegram
+        df_f_alerte = pd.concat([df_forme, pd.DataFrame([dico])], ignore_index=True)
+        df_f_alerte['Score_Forme'] = pd.to_numeric(df_f_alerte['Score_Forme'])
+        if len(df_f_alerte) >= 3:
+            df_f_alerte['Date'] = pd.to_datetime(df_f_alerte['Date'])
+            df_f_alerte = df_f_alerte.sort_values('Date')
+            df_f_alerte['Moy_7j'] = df_f_alerte['Score_Forme'].rolling(window=7, min_periods=3).mean()
+            df_f_alerte['Std_7j'] = df_f_alerte['Score_Forme'].rolling(window=7, min_periods=3).std()
             
-    with col_btn_m2:
-        if st.button("🤷‍♂️ Je n'ai pas ma montre", use_container_width=True, key="btn_no_montre_matin"):
-            st.session_state['sans_montre_matin'] = True
-            st.session_state['whoop_matin_synced'] = False
-
-    # Si l'un des deux boutons a été cliqué, on affiche le questionnaire
-    if st.session_state.get('whoop_matin_synced') or st.session_state.get('sans_montre_matin'):
-        st.markdown("---")
-        st.markdown("### 🧠 2. Ton Ressenti (Subjectif)")
-        
-        date_matin = st.date_input("📅 Date du jour", value=date.today(), key="date_m")
-        col1, col2 = st.columns(2)
-        
-        # --- MODE SANS MONTRE ---
-        if st.session_state.get('sans_montre_matin'):
-            st.warning("⚠️ Mode manuel activé : Évalue toi-même ton sommeil et ta fraîcheur physique.")
-            with col1:
-                sommeil = st.slider("💤 Qualité du sommeil (1=Insomniaque, 5=Parfait)", 1, 5, 3)
-                fatigue = st.slider("🔋 Niveau de fraîcheur (1=Épuisé, 5=Frais)", 1, 5, 3)
-                
-        # --- MODE AVEC MONTRE ---
-        else:
-            with col1:
-                st.metric("❤️ Récupération WHOOP", f"{st.session_state['whoop_recup']} %")
-                st.metric("💤 Performance Sommeil", f"{st.session_state['whoop_sommeil']} %")
-                st.metric("🫀 VFC (HRV)", f"{st.session_state['whoop_vfc']} ms")
-                
-                # Conversion discrète des pourcentages WHOOP en score sur 5 pour le Google Sheets
-                sommeil = max(1, min(5, round(st.session_state['whoop_sommeil'] / 20)))
-                fatigue = max(1, min(5, round(st.session_state['whoop_recup'] / 20)))
-
-        # --- SUITE COMMUNE (Stress, Humeur, Point Clinique) ---
-        with col2:
-            stress = st.slider("🌪️ Niveau de stress (1=Très stressé, 5=Zen)", 1, 5, 3)
-            humeur = st.slider("😊 Humeur (1=Mauvaise, 5=Excellente)", 1, 5, 3)
+            moyenne_f = df_f_alerte['Moy_7j'].iloc[-1]
+            ecart_type_f = df_f_alerte['Std_7j'].iloc[-1]
             
-        st.markdown("### 🩺 Point Clinique Matinal")
-        zones_matin = st.multiselect("📍 Localisation(s) de la douleur ou gêne :", ZONES_ANATOMIQUES, key="zones_m")
-        type_douleur = st.selectbox("⚡ Quel est le type de douleur ?", [
-            "Aucune", "Musculaire (déchirure, élongation)", "Articulaire (blocage, instabilité)", 
-            "Tendineuse (progressive à l'effort)", "Osseuse (profonde)", "Ligamentaire (torsion)", 
-            "Neurologique (fourmillements)", "Courbatures (diffuses)", "Maladie (grippe, gastro...)", "Crampes"
-        ], key="type_m")
-        
-        # Petite analyse croisée au réveil
-        if st.session_state.get('whoop_matin_synced'):
-            if st.session_state['whoop_recup'] > 66 and stress <= 2:
-                st.warning("⚠️ **Décalage :** Ton corps a bien récupéré physiquement, mais tu te sens stressé ou de mauvaise humeur. C'est sûrement une charge cognitive (pré-match, perso).")
-            elif st.session_state['whoop_recup'] < 33 and fatigue >= 4: # Fatigue manuel (ressenti = frais) vs WHOOP (rouge)
-                st.warning("⚠️ **Décalage :** Tu te sens en forme, mais ton système nerveux central (VFC) est dans le rouge. L'échauffement devra être très progressif aujourd'hui !")
-        
-        if st.button("✅ Valider le Check-in Matin", use_container_width=True):
-            score_forme = sommeil + fatigue + stress + humeur
-            zones_str = ", ".join(zones_matin) if zones_matin else "Aucune"
-            dico = {
-                'Date': str(date_matin), 'Sommeil': sommeil, 'Fatigue': fatigue, 
-                'Stress': stress, 'Humeur': humeur, 'Score_Forme': score_forme,
-                'Douleur_Type': type_douleur, 'Zones_Douleur': zones_str
-            }
-            ajouter_ligne("Forme", dico)
-            st.success(f"🎉 Parfait ! Ton score de forme aujourd'hui est de {score_forme}/20. Enregistré !")
-            
-            # --- Alertes Telegram (On garde votre logique Z-score existante) ---
-            df_f_alerte = pd.concat([df_forme, pd.DataFrame([dico])], ignore_index=True)
-            df_f_alerte['Score_Forme'] = pd.to_numeric(df_f_alerte['Score_Forme'])
-            if len(df_f_alerte) >= 3:
-                df_f_alerte['Date'] = pd.to_datetime(df_f_alerte['Date'])
-                df_f_alerte = df_f_alerte.sort_values('Date')
-                df_f_alerte['Moy_7j'] = df_f_alerte['Score_Forme'].rolling(window=7, min_periods=3).mean()
-                df_f_alerte['Std_7j'] = df_f_alerte['Score_Forme'].rolling(window=7, min_periods=3).std()
-                
-                moyenne_f = df_f_alerte['Moy_7j'].iloc[-1]
-                ecart_type_f = df_f_alerte['Std_7j'].iloc[-1]
-                
-                if pd.notna(ecart_type_f) and ecart_type_f > 0:
-                    z_score_f = (score_forme - moyenne_f) / ecart_type_f
-                    
-                    if z_score_f <= -2:
-                        envoyer_telegram(f"🔴 ALERTE ROUGE FORME - Raph 🎾\nScore très bas ({score_forme}/20).\nChute à plus de 2 écarts-types de sa moyenne ({moyenne_f:.1f}). Fatigue centrale suspectée.")
-                    elif z_score_f <= -1:
-                        envoyer_telegram(f"🟠 ALERTE ORANGE FORME - Raph 🎾\nBaisse de forme ({score_forme}/20).\nÀ plus de 1 écart-type sous sa moyenne ({moyenne_f:.1f}). Adapter l'échauffement.")
+            if pd.notna(ecart_type_f) and ecart_type_f > 0:
+                z_score_f = (score_forme - moyenne_f) / ecart_type_f
+                if z_score_f <= -2:
+                    envoyer_telegram(f"🔴 ALERTE ROUGE FORME - Raph 🎾\nScore très bas ({score_forme}/20).\nChute à plus de 2 écarts-types de sa moyenne ({moyenne_f:.1f}). Fatigue centrale suspectée.")
+                elif z_score_f <= -1:
+                    envoyer_telegram(f"🟠 ALERTE ORANGE FORME - Raph 🎾\nBaisse de forme ({score_forme}/20).\nÀ plus de 1 écart-type sous sa moyenne ({moyenne_f:.1f}). Adapter l'échauffement.")
 
-            if type_douleur not in ["Aucune", "Courbatures (diffuses)"]:
-                envoyer_telegram(f"🚨 ALERTE MÉDICALE MATIN - Raph 🎾\nDouleur signalée : {type_douleur}\nZone(s) : {zones_str}")
-
-            # Nettoyage pour le prochain jour
-            st.session_state.pop('whoop_matin_synced', None)
-            st.session_state.pop('sans_montre_matin', None)
-            st.rerun()
+        if type_douleur not in ["Aucune", "Courbatures (diffuses)"]:
+            envoyer_telegram(f"🚨 ALERTE MÉDICALE MATIN - Raph 🎾\nDouleur signalée : {type_douleur}\nZone(s) : {zones_str}")
 
 # --- ONGLET 2 : SÉANCES ---
 with tab_seance:
     st.info("⏱️ **Rappel :** À remplir dans les 30 minutes suivant la fin de l'effort.")
     
-    st.markdown("### 📡 1. Données de la Montre (Objectif)")
+    date_seance = st.date_input("📅 Date de la séance", value=date.today(), key="date_s")
     
-    # Deux boutons côte à côte
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1:
-        if st.button("🔄 Synchroniser ma montre", type="primary", use_container_width=True):
-            st.session_state['whoop_synced'] = True
-            st.session_state['sans_montre'] = False
-            # Simulation des données WHOOP
-            st.session_state['whoop_strain'] = 12.5  
-            st.session_state['whoop_duree'] = 90     
-            st.session_state['whoop_type'] = "Tennis"
-            st.success("✅ Données WHOOP importées avec succès !")
-            
-    with col_btn2:
-        if st.button("🤷‍♂️ Je n'ai pas ma montre", use_container_width=True):
-            st.session_state['sans_montre'] = True
-            st.session_state['whoop_synced'] = False
-
-    # Si l'un des deux boutons a été cliqué, on affiche la suite
-    if st.session_state.get('whoop_synced') or st.session_state.get('sans_montre'):
-        st.markdown("---")
-        st.markdown("### 🧠 2. Ton Ressenti (Subjectif)")
+    col_m1, col_m2 = st.columns(2)
+    with col_m1:
+        type_final = st.selectbox("🎾 Type de séance", ["Prépa Physique", "Tennis", "Récupération", "Match"])
+    with col_m2:
+        duree_finale = st.number_input("⏱️ Durée (minutes)", min_value=1, value=90, step=15)
         
-        date_seance = st.date_input("📅 Date de la séance", value=date.today(), key="date_s")
-        
-        # --- MODE SANS MONTRE ---
-        if st.session_state.get('sans_montre'):
-            st.warning("⚠️ Mode manuel activé : Tu dois renseigner le type et la durée toi-même.")
-            col_m1, col_m2 = st.columns(2)
-            with col_m1:
-                type_final = st.selectbox("Type de séance", ["Prépa Physique", "Tennis", "Récupération", "Match"])
-            with col_m2:
-                duree_finale = st.number_input("Durée (minutes)", min_value=1, value=60)
-            strain_final = None # Pas de score WHOOP
-            
-        # --- MODE AVEC MONTRE ---
-        else:
-            col_w1, col_w2, col_w3 = st.columns(3)
-            with col_w1:
-                st.metric("Activité", st.session_state['whoop_type'])
-            with col_w2:
-                st.metric("Durée (min)", st.session_state['whoop_duree'])
-            with col_w3:
-                st.metric("Score d'Effort", f"{st.session_state['whoop_strain']} / 21")
-                
-            type_final = st.session_state['whoop_type']
-            duree_finale = st.session_state['whoop_duree']
-            strain_final = st.session_state['whoop_strain']
-
-        # --- SUITE COMMUNE (RPE) ---
-        col3, col4 = st.columns(2)
-        with col3:
-            rpe = st.slider("🥵 Difficulté ressentie (RPE 1-10)", 1, 10, 5)
-        with col4:
-            satisfaction = st.slider("🎯 Satisfaction (1-5)", 1, 5, 3)
-            
-        st.markdown("#### ⚡ Analyse de la charge")
-        charge = duree_finale * rpe
-        
-        # L'analyse croisée n'est possible que s'il a sa montre
-        if st.session_state.get('whoop_synced'):
-            strain_sur_10 = (strain_final / 21) * 10
-            ecart = rpe - strain_sur_10
-            
-            if ecart >= 3:
-                st.warning("⚠️ **Alerte Fatigue Nerveuse :** Tu as ressenti cette séance comme très dure par rapport à l'impact cardio. Signe possible d'une fatigue neuromusculaire.")
-            elif ecart <= -3:
-                st.warning("⚠️ **Alerte Surcharge :** La séance t'a paru facile, mais ton organisme a pris un gros impact cardio (Strain élevé).")
-            else:
-                st.success("✅ **Cohérence parfaite :** Ton ressenti correspond à la dépense mesurée.")
-        else:
-            st.info("💡 L'analyse croisée avec ton rythme cardiaque n'est pas disponible sans la montre.")
-
-        if st.button("🔥 Enregistrer la séance", use_container_width=True):
-            nouvelle_seance = pd.DataFrame({
-                'Date': [date_seance], 
-                'Type': [type_final], 
-                'Duree': [duree_finale], 
-                'RPE': [rpe], 
-                'Strain_WHOOP': [strain_final],
-                'Charge_sRPE': [charge], 
-                'Satisfaction': [satisfaction]
-            })
-            st.session_state['db_seances'] = pd.concat([st.session_state['db_seances'], nouvelle_seance], ignore_index=True)
-            st.success(f"📊 Séance validée ! Charge : {charge}.")
-            
-            # Réinitialisation pour la prochaine séance
-            st.session_state.pop('whoop_synced', None)
-            st.session_state.pop('sans_montre', None)
-            st.rerun()
+    st.markdown("### 📡 1. Données de la Montre (Saisie Manuelle)")
+    st.caption("Recopie les données de ta séance depuis l'application WHOOP (laisse à 0 si pas de montre).")
     
+    col_w1, col_w2 = st.columns(2)
+    with col_w1:
+        whoop_strain = st.number_input("🔥 Strain (Effort 0-21)", min_value=0.0, max_value=21.0, value=0.0, step=0.1)
+        whoop_cal = st.number_input("⚡ Énergie (kcal)", min_value=0, value=0)
+    with col_w2:
+        whoop_hr_avg = st.number_input("💓 FC Moyenne (bpm)", min_value=0, value=0)
+        whoop_hr_max = st.number_input("🚨 FC Max (bpm)", min_value=0, value=0)
+        
+    st.markdown("---")
+    st.markdown("### 🧠 2. Ton Ressenti (Subjectif)")
+
+    col3, col4 = st.columns(2)
+    with col3:
+        rpe = st.slider("🥵 Difficulté ressentie (RPE 1-10)", 1, 10, 5)
+    with col4:
+        satisfaction = st.slider("🎯 Satisfaction technique/tactique (1-5)", 1, 5, 3)
+        
+    st.markdown("#### ⚡ Analyse de la charge")
+    charge = duree_finale * rpe
+    
+    if whoop_strain > 0:
+        strain_sur_10 = (whoop_strain / 21) * 10
+        ecart = rpe - strain_sur_10
+        
+        if ecart >= 3:
+            st.warning("⚠️ **Alerte Fatigue Nerveuse :** Tu as ressenti cette séance comme très dure par rapport à l'impact cardio. Signe possible d'une fatigue neuromusculaire.")
+        elif ecart <= -3:
+            st.warning("⚠️ **Alerte Surcharge :** La séance t'a paru facile, mais ton organisme a pris un gros impact cardio (Strain élevé).")
+        else:
+            st.success("✅ **Cohérence parfaite :** Ton ressenti correspond à la dépense mesurée.")
+
+    if st.button("🔥 Enregistrer la séance", use_container_width=True):
+        dico = {
+            'Date': str(date_seance), 
+            'Type': type_final, 
+            'Duree': duree_finale, 
+            'RPE': rpe, 
+            'Charge': charge, 
+            'Satisfaction': satisfaction,
+            'Whoop_Strain': whoop_strain, 
+            'Whoop_HR_avg': whoop_hr_avg, 
+            'Whoop_HR_max': whoop_hr_max, 
+            'Whoop_Calories': whoop_cal
+        }
+        ajouter_ligne("Seances", dico)
+        st.success(f"📊 Séance validée ! Charge : {charge} unités.")
+
 # --- ONGLET 3 : BILAN SOIR ---
 with tab_soir:
     st.info("🌙 **Flash Soir :** Dernier bilan avant la récupération nocturne.")
@@ -347,9 +260,6 @@ with tab_coach:
     if saisie_mdp == MOT_DE_PASSE_COACH:
         st.success("🔓 Accès autorisé.")
         
-        # ==========================================
-        # 🚨 SYSTÈME D'ALERTES Z-SCORE (Écart-type)
-        # ==========================================
         st.markdown("---")
         st.markdown("## 🚨 Tableau de Bord des Alertes (Prévention des Blessures)")
         
@@ -419,8 +329,6 @@ with tab_coach:
             else:
                 st.info("Pas assez de données pour l'analyse de charge (minimum 3 jours nécessaires).")
                 
-        # ==========================================
-
         st.markdown("---")
         st.markdown("## 🏋️‍♂️ Suivi des Évaluations Physiques (Tests)")
         
@@ -520,6 +428,42 @@ with tab_coach:
                         st.metric(label=f"🟢 Somme Min glissante ({jours}j)", value=f"{val_min:.1f} u")
             else:
                 st.info("Pas assez de données pour afficher les charges.")
+
+        st.markdown("---")
+        st.markdown("## 🧠 Analyse Avancée : Ressenti (sRPE) vs Réel (WHOOP)")
+        
+        if not df_seances.empty and 'Whoop_Strain' in df_seances.columns:
+            # On filtre pour ne garder que les séances où Whoop > 0
+            df_plot = df_seances[pd.to_numeric(df_seances['Whoop_Strain'], errors='coerce') > 0].copy()
+            if not df_plot.empty:
+                df_plot['RPE'] = pd.to_numeric(df_plot['RPE'])
+                df_plot['Whoop_Strain'] = pd.to_numeric(df_plot['Whoop_Strain'])
+                df_plot['Strain (sur 10)'] = (df_plot['Whoop_Strain'] / 21) * 10
+                df_graph = df_plot.set_index('Date').sort_index()
+                
+                st.markdown("#### 📈 Évolution de la difficulté (RPE vs Strain)")
+                st.line_chart(df_graph[['RPE', 'Strain (sur 10)']])
+                
+                df_plot['Ecart'] = df_plot['RPE'] - df_plot['Strain (sur 10)']
+                ecart_moyen = df_plot['Ecart'].mean()
+                
+                col_c1, col_c2, col_c3 = st.columns(3)
+                col_c1.metric("Moyenne RPE (Ressenti)", f"{df_plot['RPE'].mean():.1f} / 10")
+                col_c2.metric("Moyenne Strain (Cardio)", f"{df_plot['Whoop_Strain'].mean():.1f} / 21")
+                
+                if ecart_moyen > 2:
+                    col_c3.metric("Tendance", "Surcharge Nerveuse ⚠️")
+                    st.warning("🚨 **Alerte Coach :** Raph perçoit les séances comme étant beaucoup plus dures que ce que son cœur indique. Son système nerveux central (SNC) est probablement fatigué.")
+                elif ecart_moyen < -2:
+                    col_c3.metric("Tendance", "Sous-évaluation 📉")
+                    st.info("💡 **Info Coach :** Le système cardio travaille très fort, mais Raph trouve la séance facile. C'est souvent un signe d'excellente forme !")
+                else:
+                    col_c3.metric("Tendance", "Cohérence Parfaite ✅")
+                    st.success("🎯 **Info Coach :** Son ressenti correspond exactement au coût physiologique. L'étalonnage interne de Raph est excellent en ce moment.")
+            else:
+                st.info("⏳ Aucune séance avec les données Whoop n'a encore été enregistrée pour pouvoir comparer.")
+        else:
+            st.info("⏳ Les données Whoop s'afficheront ici une fois la première séance enregistrée avec un Strain manuel.")
 
         st.markdown("---")
         
