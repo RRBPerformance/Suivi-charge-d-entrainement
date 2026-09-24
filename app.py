@@ -238,7 +238,7 @@ with tab_matin:
     # 🔄 BOUTON SYNCHRONISATION WHOOP & MÉMOIRE
     # ==========================================
     if st.session_state.get("whoop_token"):
-        if st.button("🔄 Récupérer la récupération WHOOP de Raph", use_container_width=True):
+       if st.button("🔄 Récupérer la récupération WHOOP de Raph", use_container_width=True, key="btn_whoop_matin"):
             with st.spinner("Interrogation des serveurs Whoop..."):
                 headers = {"Authorization": f"Bearer {st.session_state['whoop_token']}"}
                 url_recovery = "https://api.prod.whoop.com/developer/v1/recovery"
