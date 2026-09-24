@@ -9,6 +9,9 @@ Created on Tue Sep  8 14:27:14 2026
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import streamlit as st
 import pandas as pd
 from datetime import date
@@ -126,7 +129,7 @@ with tab_matin:
     st.info("💡 **Consigne :** À remplir chaque matin au réveil pour adapter la charge de la journée.")
     
     # 1. Gestion de la connexion Whoop
-    if 'whoop_token' not in st.session_state:
+    if 'whoop_token' not in st.session_state or st.session_state['whoop_token'] is None:
         client_id = st.secrets["WHOOP_CLIENT_ID"]
         redirect_uri = "https://suivi-charge-rrb.streamlit.app/"
         scope_str = "read:recovery read:cycles read:sleep read:workout"
@@ -168,11 +171,10 @@ with tab_matin:
                             col_w1.metric("🔴/🟢 Score de Récupération", f"{st.session_state['w_score']} %")
                             col_w2.metric("💓 VFC (Variabilité)", f"{st.session_state['w_vfc']} ms")
                             col_w3.metric("🫀 FC Repos", f"{st.session_state['w_fc']} bpm")
-                       else:
+                        else:
                             st.warning("Aucune donnée de sommeil finalisée trouvée pour aujourd'hui.")
                             
                     elif rep.status_code == 401:
-                        # 🧹 LE RÉFLEXE ANTI-BUG : Si le jeton est périmé, on l'efface et on relance !
                         st.session_state["whoop_token"] = None
                         st.warning("⏱️ La session Whoop a expiré. Rechargement en cours...")
                         st.rerun()
@@ -180,6 +182,8 @@ with tab_matin:
                     else:
                         st.error(f"Erreur avec l'API Whoop : {rep.status_code}")
                 except Exception as e:
+                    st.error(f"Erreur de communication : {e}")
+
     st.divider()
 
     # 2. Formulaire Hooper
@@ -262,6 +266,12 @@ with tab_seance:
                             col_ws4.metric("⚡ Énergie", f"{st.session_state['w_cal']} kcal")
                         else:
                             st.warning("Aucun entraînement récent trouvé sur Whoop.")
+                            
+                    elif rep.status_code == 401:
+                        st.session_state["whoop_token"] = None
+                        st.warning("⏱️ La session Whoop a expiré. Rechargement en cours...")
+                        st.rerun()
+                        
                     else:
                         st.error(f"Erreur API Whoop : {rep.status_code}")
                 except Exception as e:
