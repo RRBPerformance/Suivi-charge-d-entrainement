@@ -507,10 +507,10 @@ with tab_coach:
             col_f1, col_f2 = st.columns(2)
             with col_f1:
                 date_trajet = st.date_input("📅 Date du trajet", value=date.today(), key="date_frais")
-                depart = st.text_input("📍 Lieu de départ (ex: Guéthary)")
+                depart = st.text_input("📍 Lieu de départ ")
             with col_f2:
                 distance_km = st.number_input("📏 Distance totale parcourue (km)", min_value=0.0, step=1.0)
-                arrivee = st.text_input("🏁 Lieu d'arrivée (ex: Anglet)")
+                arrivee = st.text_input("🏁 Lieu d'arrivée ")
             
             generer = st.form_submit_button("🧾 Générer la note de frais", use_container_width=True)
             
