@@ -493,15 +493,13 @@ with tab_coach:
         if not df_soir.empty:
             st.dataframe(df_soir, use_container_width=True)
             index_a_supprimer_soir = st.selectbox("Sélectionner la ligne à supprimer (Soir) :", df_soir.index, key="del_soir2")
-            if st.button("🗑️ Supprimer cette ligne (Soir)"):
+            if st.button("🗑️️ Supprimer cette ligne (Soir)"):
                 supprimer_ligne_gsheets("Soir", index_a_supprimer_soir)
                 st.success("Bilan supprimé du Google Sheets !")
                 st.rerun()
         
-    elif saisie_mdp != "":
-        st.error("❌ Mot de passe incorrect.")
-
-st.markdown("---")
+        # --- NOUVELLE SECTION : NOTE DE FRAIS ---
+        st.markdown("---")
         st.markdown("## 🚗 Facturation des Frais Kilométriques")
         st.info("💡 Barème kilométrique appliqué : 0,665 € / km (inclut carburant, usure et assurance)")
         
@@ -520,7 +518,6 @@ st.markdown("---")
             if distance_km > 0 and depart != "" and arrivee != "":
                 montant_total = distance_km * 0.665
                 
-                # Création d'une belle facture stylisée en HTML/CSS
                 facture_html = f"""
                 <div style="border: 2px solid #1E3A8A; padding: 25px; border-radius: 10px; background-color: #F3F4F6; margin-top: 20px;">
                     <h2 style="text-align: center; color: #1E3A8A; margin-top: 0; margin-bottom: 5px;">🎾 NOTE DE FRAIS - DÉPLACEMENT</h2>
@@ -553,6 +550,9 @@ st.markdown("---")
                 </div>
                 """
                 st.markdown(facture_html, unsafe_allow_html=True)
-                st.balloons() # Petite animation sympa pour valider
+                st.balloons()
             else:
                 st.error("⚠️ Veuillez remplir le lieu de départ, d'arrivée, et indiquer une distance supérieure à 0.")
+                
+    elif saisie_mdp != "":
+        st.error("❌ Mot de passe incorrect.")
