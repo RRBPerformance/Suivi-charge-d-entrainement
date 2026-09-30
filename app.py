@@ -51,7 +51,6 @@ def charger_donnees():
             
         try:
             df_frais = pd.DataFrame(sh.worksheet("Frais").get_all_records())
-            # Sécurité si l'onglet Frais existait déjà sans la colonne "Statut"
             if not df_frais.empty and 'Statut' not in df_frais.columns:
                 df_frais['Statut'] = "Non payé"
         except Exception:
@@ -95,9 +94,7 @@ def marquer_paye_gsheets(onglet_nom, index_ligne):
     try:
         sh = init_connection()
         worksheet = sh.worksheet(onglet_nom)
-        # Met à jour la ligne avec "Payé" dans la 6ème colonne (Statut)
         worksheet.update_cell(index_ligne + 2, 6, "Payé")
-        # Sécurité : force l'en-tête de la colonne 6 à "Statut" au cas où
         worksheet.update_cell(1, 6, "Statut")
         st.cache_data.clear()
     except Exception as e:
@@ -413,34 +410,67 @@ with tab_coach:
                     st.rerun()
 
         # ==========================================
-        # --- NOUVELLE SECTION : GESTION DES FRAIS AVEC STATUT ---
+        # --- SECTION : GESTION DES FRAIS (MÉMOIRE & ALLER-RETOUR) ---
         # ==========================================
         st.markdown("---")
         st.markdown("## 🚗 Registre des Frais Kilométriques")
-        st.info("💡 Barème appliqué : 0,665 € / km. Tous les trajets s'additionnent jusqu'à ce qu'ils soient marqués comme PAYÉS.")
+        st.info("💡 Barème appliqué : 0,665 € / km. Les données s'additionnent jusqu'à ce qu'elles soient marquées comme PAYÉES.")
         
+        # 1. Nettoyage anti-bug : on s'assure de remplacer les virgules par des points
+        if not df_frais.empty:
+            df_frais['Distance_km'] = df_frais['Distance_km'].astype(str).str.replace(',', '.').apply(pd.to_numeric, errors='coerce').fillna(0)
+            df_frais['Montant_Euros'] = df_frais['Montant_Euros'].astype(str).str.replace(',', '.').apply(pd.to_numeric, errors='coerce').fillna(0)
+
+        # 2. Création de la mémoire des lieux (extraction depuis l'historique)
+        lieux_connus = []
+        if not df_frais.empty and 'Depart' in df_frais.columns and 'Arrivee' in df_frais.columns:
+            tous_lieux = pd.concat([df_frais['Depart'], df_frais['Arrivee']]).dropna().unique().tolist()
+            lieux_connus = sorted([L for L in tous_lieux if L != ""])
+        
+        options_lieux = ["--- Nouveau lieu ---"] + lieux_connus
+
         with st.expander("➕ Saisir un nouveau déplacement (Match/Tournoi)"):
             with st.form("form_frais"):
+                date_trajet = st.date_input("📅 Date du trajet", value=date.today(), key="date_frais")
+                
                 col_f1, col_f2 = st.columns(2)
                 with col_f1:
-                    date_trajet = st.date_input("📅 Date du trajet", value=date.today(), key="date_frais")
-                    depart = st.text_input("📍 Lieu de départ (ex: Guéthary)")
+                    choix_depart = st.selectbox("📍 Départ (Choix rapide)", options_lieux, index=0)
+                    saisie_depart = st.text_input("Ou saisir un nouveau départ :", disabled=(choix_depart != "--- Nouveau lieu ---"))
+                    
                 with col_f2:
-                    distance_km = st.number_input("📏 Distance (km)", min_value=0.0, step=1.0)
-                    arrivee = st.text_input("🏁 Lieu d'arrivée (ex: Anglet)")
+                    choix_arrivee = st.selectbox("🏁 Arrivée (Choix rapide)", options_lieux, index=0)
+                    saisie_arrivee = st.text_input("Ou saisir une nouvelle arrivée :", disabled=(choix_arrivee != "--- Nouveau lieu ---"))
+                
+                col_d1, col_d2 = st.columns(2)
+                with col_d1:
+                    distance_km = st.number_input("📏 Distance d'un aller (en km)", min_value=0.0, step=1.0)
+                with col_d2:
+                    st.write("")
+                    st.write("")
+                    aller_retour = st.checkbox("🔄 Trajet Aller-Retour (Double automatiquement la distance)")
                 
                 ajouter_frais = st.form_submit_button("💾 Ajouter à la note de frais", use_container_width=True)
                 
             if ajouter_frais:
-                if distance_km > 0 and depart != "" and arrivee != "":
-                    montant = distance_km * 0.665
+                depart_final = saisie_depart if choix_depart == "--- Nouveau lieu ---" else choix_depart
+                arrivee_final = saisie_arrivee if choix_arrivee == "--- Nouveau lieu ---" else choix_arrivee
+
+                if distance_km > 0 and depart_final.strip() != "" and arrivee_final.strip() != "":
+                    # Calcul : on double la distance si la case est cochée
+                    dist_totale = distance_km * 2 if aller_retour else distance_km
+                    montant = dist_totale * 0.665
+                    
+                    # On force le format avec un point pour éviter les bugs
+                    montant_str = f"{montant:.2f}"
+                    
                     dico_frais = {
                         'Date': str(date_trajet),
-                        'Depart': depart,
-                        'Arrivee': arrivee,
-                        'Distance_km': distance_km,
-                        'Montant_Euros': round(montant, 2),
-                        'Statut': 'Non payé' # Le trajet naît "Non payé" par défaut
+                        'Depart': depart_final.strip(),
+                        'Arrivee': arrivee_final.strip(),
+                        'Distance_km': dist_totale, 
+                        'Montant_Euros': montant_str,
+                        'Statut': 'Non payé'
                     }
                     ajouter_ligne("Frais", dico_frais)
                     st.success("Déplacement enregistré en attente de paiement !")
@@ -451,18 +481,11 @@ with tab_coach:
         # --- GÉNÉRATION DE LA FACTURE INTELLIGENTE ---
         st.markdown("### 🧾 Note de Frais Globale")
         if not df_frais.empty:
-            # Sécurisation des types
-            df_frais['Distance_km'] = pd.to_numeric(df_frais['Distance_km'], errors='coerce').fillna(0)
-            df_frais['Montant_Euros'] = pd.to_numeric(df_frais['Montant_Euros'], errors='coerce').fillna(0)
-            
-            # Calcul des totaux séparés (Payé vs Non Payé)
             total_restant = df_frais[df_frais['Statut'] != 'Payé']['Montant_Euros'].sum()
             total_paye = df_frais[df_frais['Statut'] == 'Payé']['Montant_Euros'].sum()
             
-            # Construction des lignes HTML
             lignes_html = ""
             for idx, row in df_frais.iterrows():
-                # On met un badge vert ou rouge selon le statut
                 badge_statut = "<span style='color: #10B981; font-weight: bold;'>✅ Payé</span>" if row['Statut'] == 'Payé' else "<span style='color: #EF4444; font-weight: bold;'>⏳ En attente</span>"
                 
                 lignes_html += f"""<tr>
@@ -498,7 +521,6 @@ with tab_coach:
 </div>"""
             st.markdown(facture_html, unsafe_allow_html=True)
             
-            # --- ACTIONS : MARQUER PAYÉ OU SUPPRIMER ---
             st.markdown("<br>", unsafe_allow_html=True)
             with st.expander("💳 Gérer les paiements ou Supprimer un trajet"):
                 st.dataframe(df_frais, use_container_width=True)
