@@ -515,7 +515,7 @@ with tab_coach:
             generer = st.form_submit_button("🧾 Générer la note de frais", use_container_width=True)
             
             if generer:
-            if distance_km > 0 and depart != "" and arrivee != "":
+                if distance_km > 0 and depart != "" and arrivee != "":
                 montant_total = distance_km * 0.665
                 
                 # On colle le code HTML tout à gauche pour éviter le bug du "bloc de code" Streamlit
