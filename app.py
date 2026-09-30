@@ -165,7 +165,7 @@ with tab_matin:
 
 # --- ONGLET 2 : SÉANCES ---
 with tab_seance:
-    st.info("⏱️ **Rappel :** À remplir dans les 30 minutes suivant la fin de l'effort.")
+    st.info("⏱️️ **Rappel :** À remplir dans les 30 minutes suivant la fin de l'effort.")
     
     date_seance = st.date_input("📅 Date de la séance", value=date.today(), key="date_s")
     
@@ -363,7 +363,7 @@ with tab_coach:
         if not df_tests.empty:
             st.dataframe(df_tests, use_container_width=True)
             index_a_supprimer_t = st.selectbox("Sélectionner la ligne à supprimer (Tests) :", df_tests.index, key="del_t")
-            if st.button("🗑️ Supprimer ce test"):
+            if st.button("🗑️️ Supprimer ce test"):
                 supprimer_ligne_gsheets("Tests", index_a_supprimer_t)
                 st.success("Test supprimé du Google Sheets !")
                 st.rerun()
@@ -493,11 +493,11 @@ with tab_coach:
         if not df_soir.empty:
             st.dataframe(df_soir, use_container_width=True)
             index_a_supprimer_soir = st.selectbox("Sélectionner la ligne à supprimer (Soir) :", df_soir.index, key="del_soir2")
-            if st.button("🗑️️ Supprimer cette ligne (Soir)"):
+            if st.button("🗑️ Supprimer cette ligne (Soir)"):
                 supprimer_ligne_gsheets("Soir", index_a_supprimer_soir)
                 st.success("Bilan supprimé du Google Sheets !")
                 st.rerun()
-        
+
         # --- NOUVELLE SECTION : NOTE DE FRAIS ---
         st.markdown("---")
         st.markdown("## 🚗 Facturation des Frais Kilométriques")
@@ -507,52 +507,37 @@ with tab_coach:
             col_f1, col_f2 = st.columns(2)
             with col_f1:
                 date_trajet = st.date_input("📅 Date du trajet", value=date.today(), key="date_frais")
-                depart = st.text_input("📍 Lieu de départ ")
+                depart = st.text_input("📍 Lieu de départ (ex: Guéthary)")
             with col_f2:
                 distance_km = st.number_input("📏 Distance totale parcourue (km)", min_value=0.0, step=1.0)
-                arrivee = st.text_input("🏁 Lieu d'arrivée ")
+                arrivee = st.text_input("🏁 Lieu d'arrivée (ex: Anglet)")
             
             generer = st.form_submit_button("🧾 Générer la note de frais", use_container_width=True)
             
-            if generer:
-                if distance_km > 0 and depart != "" and arrivee != "":
+        if generer:
+            if distance_km > 0 and depart != "" and arrivee != "":
                 montant_total = distance_km * 0.665
                 
-                # On colle le code HTML tout à gauche pour éviter le bug du "bloc de code" Streamlit
-                facture_html = f"""
-<div style="border: 2px solid #1E3A8A; padding: 25px; border-radius: 10px; background-color: #F3F4F6; margin-top: 20px;">
-    <h2 style="text-align: center; color: #1E3A8A; margin-top: 0; margin-bottom: 5px;">🎾 NOTE DE FRAIS - DÉPLACEMENT</h2>
-    <p style="text-align: center; color: #6B7280; font-size: 14px; margin-top: 0;">Généré le {date.today().strftime('%d/%m/%Y')}</p>
-    <hr style="border-top: 2px dashed #9CA3AF; margin: 20px 0;">
-    <table style="width: 100%; font-size: 16px; margin-bottom: 15px;">
-        <tr>
-            <td style="padding: 8px 0; color: #374151;"><b>📅 Date du trajet :</b></td>
-            <td style="padding: 8px 0; text-align: right; color: #111827;">{date_trajet.strftime('%d/%m/%Y')}</td>
-        </tr>
-        <tr>
-            <td style="padding: 8px 0; color: #374151;"><b>📍 Itinéraire :</b></td>
-            <td style="padding: 8px 0; text-align: right; color: #111827;">{depart} ➡️ {arrivee}</td>
-        </tr>
-        <tr>
-            <td style="padding: 8px 0; color: #374151;"><b>📏 Distance parcourue :</b></td>
-            <td style="padding: 8px 0; text-align: right; color: #111827;">{distance_km:.1f} km</td>
-        </tr>
-        <tr>
-            <td style="padding: 8px 0; color: #374151;"><b>💶 Barème appliqué :</b></td>
-            <td style="padding: 8px 0; text-align: right; color: #111827;">0,665 € / km</td>
-        </tr>
-    </table>
-    <hr style="border-top: 2px dashed #9CA3AF; margin: 20px 0;">
-    <div style="background-color: #10B981; padding: 15px; border-radius: 8px; text-align: center;">
-        <h1 style="color: white; margin: 0; font-size: 28px;">TOTAL : {montant_total:.2f} €</h1>
-    </div>
+                # Code HTML formaté pour s'afficher correctement dans Streamlit (sans espace au début des lignes HTML)
+                facture_html = f"""<div style="border: 2px solid #1E3A8A; padding: 25px; border-radius: 10px; background-color: #F3F4F6; margin-top: 20px;">
+<h2 style="text-align: center; color: #1E3A8A; margin-top: 0; margin-bottom: 5px;">🎾 NOTE DE FRAIS - DÉPLACEMENT</h2>
+<p style="text-align: center; color: #6B7280; font-size: 14px; margin-top: 0;">Généré le {date.today().strftime('%d/%m/%Y')}</p>
+<hr style="border-top: 2px dashed #9CA3AF; margin: 20px 0;">
+<table style="width: 100%; font-size: 16px; margin-bottom: 15px;">
+<tr><td style="padding: 8px 0; color: #374151;"><b>📅 Date du trajet :</b></td><td style="padding: 8px 0; text-align: right; color: #111827;">{date_trajet.strftime('%d/%m/%Y')}</td></tr>
+<tr><td style="padding: 8px 0; color: #374151;"><b>📍 Itinéraire :</b></td><td style="padding: 8px 0; text-align: right; color: #111827;">{depart} ➡️ {arrivee}</td></tr>
+<tr><td style="padding: 8px 0; color: #374151;"><b>📏 Distance parcourue :</b></td><td style="padding: 8px 0; text-align: right; color: #111827;">{distance_km:.1f} km</td></tr>
+<tr><td style="padding: 8px 0; color: #374151;"><b>💶 Barème appliqué :</b></td><td style="padding: 8px 0; text-align: right; color: #111827;">0,665 € / km</td></tr>
+</table>
+<hr style="border-top: 2px dashed #9CA3AF; margin: 20px 0;">
+<div style="background-color: #10B981; padding: 15px; border-radius: 8px; text-align: center;">
+<h1 style="color: white; margin: 0; font-size: 28px;">TOTAL : {montant_total:.2f} €</h1>
 </div>
-"""
+</div>"""
                 st.markdown(facture_html, unsafe_allow_html=True)
                 st.balloons()
             else:
                 st.error("⚠️ Veuillez remplir le lieu de départ, d'arrivée, et indiquer une distance supérieure à 0.")
-  
-                
+
     elif saisie_mdp != "":
         st.error("❌ Mot de passe incorrect.")
