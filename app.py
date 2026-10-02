@@ -410,18 +410,16 @@ with tab_coach:
                     st.rerun()
 
         # ==========================================
-        # --- SECTION : GESTION DES FRAIS (MÉMOIRE & ALLER-RETOUR) ---
+        # --- SECTION : GESTION DES FRAIS ---
         # ==========================================
         st.markdown("---")
         st.markdown("## 🚗 Registre des Frais Kilométriques")
         st.info("💡 Barème appliqué : 0,665 € / km. Les données s'additionnent jusqu'à ce qu'elles soient marquées comme PAYÉES.")
         
-        # 1. Nettoyage anti-bug : on s'assure de remplacer les virgules par des points
         if not df_frais.empty:
             df_frais['Distance_km'] = df_frais['Distance_km'].astype(str).str.replace(',', '.').apply(pd.to_numeric, errors='coerce').fillna(0)
             df_frais['Montant_Euros'] = df_frais['Montant_Euros'].astype(str).str.replace(',', '.').apply(pd.to_numeric, errors='coerce').fillna(0)
 
-        # 2. Création de la mémoire des lieux (extraction depuis l'historique)
         lieux_connus = []
         if not df_frais.empty and 'Depart' in df_frais.columns and 'Arrivee' in df_frais.columns:
             tous_lieux = pd.concat([df_frais['Depart'], df_frais['Arrivee']]).dropna().unique().tolist()
@@ -450,25 +448,24 @@ with tab_coach:
                     st.write("")
                     aller_retour = st.checkbox("🔄 Trajet Aller-Retour (Double automatiquement la distance)")
                 
-                ajouter_frais = st.form_submit_button("💾 Ajouter à la note de frais", use_container_width=True)
+                ajouter_frais = st.form_submit_button("💾 Ajouter à l'historique", use_container_width=True)
                 
             if ajouter_frais:
                 depart_final = saisie_depart if choix_depart == "--- Nouveau lieu ---" else choix_depart
                 arrivee_final = saisie_arrivee if choix_arrivee == "--- Nouveau lieu ---" else choix_arrivee
 
                 if distance_km > 0 and depart_final.strip() != "" and arrivee_final.strip() != "":
-                    # Calcul : on double la distance si la case est cochée
                     dist_totale = distance_km * 2 if aller_retour else distance_km
                     montant = dist_totale * 0.665
                     
-                    # On force le format avec un point pour éviter les bugs
+                    distance_str = f"{dist_totale:.1f}"
                     montant_str = f"{montant:.2f}"
                     
                     dico_frais = {
                         'Date': str(date_trajet),
                         'Depart': depart_final.strip(),
                         'Arrivee': arrivee_final.strip(),
-                        'Distance_km': dist_totale, 
+                        'Distance_km': distance_str, 
                         'Montant_Euros': montant_str,
                         'Statut': 'Non payé'
                     }
@@ -478,8 +475,8 @@ with tab_coach:
                 else:
                     st.error("⚠️ Veuillez remplir les lieux et indiquer une distance > 0.")
         
-        # --- GÉNÉRATION DE LA FACTURE INTELLIGENTE ---
-        st.markdown("### 🧾 Note de Frais Globale")
+        # --- HISTORIQUE GLOBAL DES FRAIS ---
+        st.markdown("### 🗃️ Historique Global (Payés & Non Payés)")
         if not df_frais.empty:
             total_restant = df_frais[df_frais['Statut'] != 'Payé']['Montant_Euros'].sum()
             total_paye = df_frais[df_frais['Statut'] == 'Payé']['Montant_Euros'].sum()
@@ -496,33 +493,75 @@ with tab_coach:
 <td style="padding: 10px; border-bottom: 1px solid #D1D5DB; text-align: right;"><b>{row['Montant_Euros']:.2f} €</b></td>
 </tr>"""
 
-            facture_html = f"""<div style="border: 2px solid #1E3A8A; padding: 25px; border-radius: 10px; background-color: #F3F4F6; margin-top: 15px;">
-<h2 style="text-align: center; color: #1E3A8A; margin-top: 0; margin-bottom: 5px;">🎾 RÉCAPITULATIF DES FRAIS DE DÉPLACEMENT</h2>
-<p style="text-align: center; color: #6B7280; font-size: 14px; margin-top: 0;">Généré le {date.today().strftime('%d/%m/%Y')}</p>
-<hr style="border-top: 2px dashed #9CA3AF; margin: 20px 0;">
-<table style="width: 100%; font-size: 15px; border-collapse: collapse; margin-bottom: 25px;">
+            historique_html = f"""<div style="border: 1px solid #E5E7EB; padding: 15px; border-radius: 8px; background-color: #F9FAFB; margin-bottom: 15px;">
+<table style="width: 100%; font-size: 14px; border-collapse: collapse;">
 <thead>
-<tr style="background-color: #E5E7EB; text-transform: uppercase; font-size: 13px; color: #374151;">
-<th style="padding: 10px; text-align: left;">Date</th>
-<th style="padding: 10px; text-align: left;">Trajet</th>
-<th style="padding: 10px; text-align: center;">Distance</th>
-<th style="padding: 10px; text-align: center;">Statut</th>
-<th style="padding: 10px; text-align: right;">Montant</th>
+<tr style="background-color: #E5E7EB; text-transform: uppercase; font-size: 12px; color: #374151;">
+<th style="padding: 8px; text-align: left;">Date</th>
+<th style="padding: 8px; text-align: left;">Trajet</th>
+<th style="padding: 8px; text-align: center;">Distance</th>
+<th style="padding: 8px; text-align: center;">Statut</th>
+<th style="padding: 8px; text-align: right;">Montant</th>
 </tr>
 </thead>
 <tbody>
 {lignes_html}
 </tbody>
 </table>
-<div style="background-color: #10B981; padding: 15px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
-<span style="color: white; font-size: 16px;">Déjà remboursé : {total_paye:.2f} €</span>
-<h1 style="color: white; margin: 0; font-size: 26px;">RESTE À PAYER : {total_restant:.2f} €</h1>
+<div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
+<span style="color: #6B7280; font-size: 14px;">Déjà remboursé : <b>{total_paye:.2f} €</b></span>
+<span style="color: #EF4444; font-size: 16px;">Reste à payer (Total) : <b>{total_restant:.2f} €</b></span>
 </div>
 </div>"""
-            st.markdown(facture_html, unsafe_allow_html=True)
+            st.markdown(historique_html, unsafe_allow_html=True)
             
+            # --- FACTURE POUR LES PARENTS (UNIQUEMENT IMPAYÉS) ---
+            st.markdown("### 📨 Édition de la Note de Frais")
+            df_impayes = df_frais[df_frais['Statut'] != 'Payé']
+            
+            if not df_impayes.empty:
+                if st.button("📄 Générer la note de frais officielle (Impayés)", use_container_width=True):
+                    lignes_impayes_html = ""
+                    for idx, row in df_impayes.iterrows():
+                        lignes_impayes_html += f"""<tr>
+<td style="padding: 10px; border-bottom: 1px solid #E5E7EB;">{row['Date']}</td>
+<td style="padding: 10px; border-bottom: 1px solid #E5E7EB;">{row['Depart']} ➡️ {row['Arrivee']}</td>
+<td style="padding: 10px; border-bottom: 1px solid #E5E7EB; text-align: center;">{row['Distance_km']:.1f} km</td>
+<td style="padding: 10px; border-bottom: 1px solid #E5E7EB; text-align: right;"><b>{row['Montant_Euros']:.2f} €</b></td>
+</tr>"""
+
+                    facture_parents = f"""<div style="border: 2px solid #1E3A8A; padding: 30px; border-radius: 10px; background-color: #FFFFFF; margin-top: 15px; box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);">
+<h2 style="text-align: center; color: #1E3A8A; margin-top: 0; margin-bottom: 5px;">🎾 NOTE DE FRAIS - DÉPLACEMENTS SPORTIFS</h2>
+<h4 style="text-align: center; color: #374151; margin-top: 0; font-weight: normal;">Athlète : <b>Raph</b> | À l'attention des parents</h4>
+<p style="text-align: center; color: #6B7280; font-size: 14px; margin-top: 10px;">Document édité le : {date.today().strftime('%d/%m/%Y')} <br> Barème appliqué : 0,665 € / km</p>
+<hr style="border-top: 2px solid #1E3A8A; margin: 25px 0;">
+<table style="width: 100%; font-size: 15px; border-collapse: collapse; margin-bottom: 30px; color: #111827;">
+<thead>
+<tr style="background-color: #F3F4F6; text-transform: uppercase; font-size: 13px; color: #1E3A8A;">
+<th style="padding: 12px; text-align: left;">Date</th>
+<th style="padding: 12px; text-align: left;">Trajet (Aller-Retour compris si applicable)</th>
+<th style="padding: 12px; text-align: center;">Distance</th>
+<th style="padding: 12px; text-align: right;">Montant</th>
+</tr>
+</thead>
+<tbody>
+{lignes_impayes_html}
+</tbody>
+</table>
+<div style="background-color: #1E3A8A; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+<span style="color: white; font-size: 16px;">Nombre de trajets : {len(df_impayes)}</span>
+<h1 style="color: white; margin: 0; font-size: 28px;">NET À PAYER : {total_restant:.2f} €</h1>
+</div>
+<p style="text-align: center; color: #6B7280; font-size: 13px; margin-top: 20px; font-style: italic;">Merci de procéder au règlement de cette note de frais. <br>Le Coach.</p>
+</div>"""
+                    st.markdown(facture_parents, unsafe_allow_html=True)
+                    st.balloons()
+            else:
+                st.success("✅ Tous les trajets ont été réglés. Aucune facture en attente !")
+            
+            # --- ACTIONS : GÉRER LES STATUTS ---
             st.markdown("<br>", unsafe_allow_html=True)
-            with st.expander("💳 Gérer les paiements ou Supprimer un trajet"):
+            with st.expander("⚙️ Marquer comme PAYÉ ou Supprimer un trajet"):
                 st.dataframe(df_frais, use_container_width=True)
                 
                 col_act1, col_act2, col_act3 = st.columns([2, 1, 1])
