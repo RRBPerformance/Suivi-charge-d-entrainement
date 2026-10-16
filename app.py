@@ -284,6 +284,8 @@ with tab_coach:
     if saisie_mdp == MOT_DE_PASSE_COACH:
         st.success("🔓 Accès autorisé.")
         
+        df_forme, df_seances, df_soir, df_tests, df_frais = charger_donnees()
+        
         st.markdown("---")
         st.markdown("## 🚨 Tableau de Bord des Alertes")
         
@@ -325,7 +327,11 @@ with tab_coach:
                 df_s['Date'] = pd.to_datetime(df_s['Date'])
                 
                 df_jour = df_s.groupby('Date')['Charge'].sum().reset_index()
-                df_jour = df_jour.sort_values('Date')
+                df_jour = df_jour.set_index('Date').sort_index()
+                
+                # Injection des jours vides pour le calcul des alertes
+                idx_alerte = pd.date_range(start=df_jour.index.min(), end=pd.to_datetime(date.today()))
+                df_jour = df_jour.reindex(idx_alerte, fill_value=0)
                 
                 df_jour['Moy_21j'] = df_jour['Charge'].rolling(window=21, min_periods=3).mean()
                 df_jour['Std_21j'] = df_jour['Charge'].rolling(window=21, min_periods=3).std()
@@ -352,7 +358,50 @@ with tab_coach:
                 st.info("Pas assez de données pour l'analyse.")
 
         st.markdown("---")
-        st.markdown("## 📈 Tableaux de Bord")
+        st.markdown("## 🏋️‍♂️ Suivi des Évaluations Physiques (Tests)")
+        
+        with st.expander("➕ Saisir un nouveau résultat de Test"):
+            col_t1, col_t2 = st.columns(2)
+            with col_t1:
+                date_test = st.date_input("Date du test", value=date.today(), key="d_test")
+                periode = st.selectbox("Période d'évaluation", ["Test Initial (Septembre)", "Test Intermédiaire (Hiver)", "Test Final (Printemps)"])
+                
+                nom_test = st.selectbox("Type de Test", [
+                    "VMA", "Sprint 10m", "Suicide", "Taille", "Taille bras levés", "Poids", "Envergure",
+                    "Mobilité - Cheville", "Mobilité - Ischio (doigt par terre)", "Mobilité - Quadri (touche fesse)",
+                    "Mobilité - Épaule à 90°", "Mobilité - Épaule bras tendus", "Test cognitif",
+                    "Triple saut sur 1 pied sans élan", "Tour de 4 plots aller-retour (5m d'écart)"
+                ])
+                cote = st.selectbox("Côté / Jambe (si applicable)", ["Aucun / Bilatéral", "Droite", "Gauche"])
+                
+            with col_t2:
+                resultat = st.number_input("Résultat obtenu", format="%.2f", step=0.1)
+                unite = st.text_input("Unité (ex: sec, cm, kg, palier)")
+                objectif = st.text_input("Objectif fixé pour le prochain test")
+                
+            if st.button("💾 Enregistrer le résultat du Test", use_container_width=True):
+                dico_test = {
+                    'Date': str(date_test), 'Periode': periode, 'Test': nom_test, 'Cote': cote, 
+                    'Resultat': resultat, 'Unite': unite, 'Objectif_Prochain': objectif
+                }
+                ajouter_ligne("Tests", dico_test)
+                st.success("Résultat de test enregistré avec succès !")
+                st.rerun()
+
+        if not df_tests.empty:
+            st.dataframe(df_tests, use_container_width=True)
+            index_a_supprimer_t = st.selectbox("Sélectionner la ligne à supprimer (Tests) :", df_tests.index, key="del_t")
+            if st.button("🗑️ Supprimer ce test"):
+                supprimer_ligne_gsheets("Tests", index_a_supprimer_t)
+                st.success("Test supprimé du Google Sheets !")
+                st.rerun()
+            csv_tests = df_tests.to_csv(index=False).encode('utf-8')
+            st.download_button(label="📥 Télécharger la base TESTS (CSV)", data=csv_tests, file_name='tests_physiques.csv', mime='text/csv')
+        else:
+            st.info("Aucun résultat de test n'a encore été enregistré.")
+
+        st.markdown("---")
+        st.markdown("## 📈 Tableaux de Bord & Sommes Glissantes")
         
         col_g1, col_g2 = st.columns(2)
         
@@ -376,10 +425,20 @@ with tab_coach:
                 
                 if vue_charge == "Séances (Empilé)":
                     df_pivot = df_s.pivot_table(index='Date', columns='Type', values='Charge', aggfunc='sum').fillna(0)
+                    
+                    # Injection des jours vides pour le graphique
+                    idx_pivot = pd.date_range(start=df_pivot.index.min(), end=pd.to_datetime(date.today()))
+                    df_pivot = df_pivot.reindex(idx_pivot, fill_value=0)
+                    
                     df_pivot.index = df_pivot.index.strftime('%Y-%m-%d')
                     st.bar_chart(df_pivot)
                 else:
                     df_jour = df_s.groupby('Date')['Charge'].sum().reset_index().set_index('Date').sort_index()
+                    
+                    # Injection des jours vides pour le graphique
+                    idx_jour = pd.date_range(start=df_jour.index.min(), end=pd.to_datetime(date.today()))
+                    df_jour = df_jour.reindex(idx_jour, fill_value=0)
+                    
                     df_glissant = df_jour.rolling(window='7D', min_periods=1).sum()
                     df_glissant.index = df_glissant.index.strftime('%Y-%m-%d')
                     st.line_chart(df_glissant)
@@ -387,25 +446,73 @@ with tab_coach:
                 st.info("Pas assez de données.")
 
         st.markdown("---")
-        st.subheader("🌅 Gérer les Bases de Données (Suppression)")
+        st.markdown("## 🧠 Analyse Avancée : Ressenti (sRPE) vs Réel (WHOOP)")
         
-        col_db1, col_db2, col_db3 = st.columns(3)
-        with col_db1:
-            if not df_forme.empty:
-                index_m = st.selectbox("Ligne (Matin) :", df_forme.index)
-                if st.button("🗑️ Supprimer Forme"):
+        if not df_seances.empty and 'Whoop_Strain' in df_seances.columns:
+            df_plot = df_seances[pd.to_numeric(df_seances['Whoop_Strain'], errors='coerce') > 0].copy()
+            if not df_plot.empty:
+                df_plot['RPE'] = pd.to_numeric(df_plot['RPE'])
+                df_plot['Whoop_Strain'] = pd.to_numeric(df_plot['Whoop_Strain'])
+                df_plot['Strain (sur 10)'] = (df_plot['Whoop_Strain'] / 21) * 10
+                df_graph = df_plot.set_index('Date').sort_index()
+                
+                st.markdown("#### 📈 Évolution de la difficulté (RPE vs Strain)")
+                st.line_chart(df_graph[['RPE', 'Strain (sur 10)']])
+                
+                df_plot['Ecart'] = df_plot['RPE'] - df_plot['Strain (sur 10)']
+                ecart_moyen = df_plot['Ecart'].mean()
+                
+                col_c1, col_c2, col_c3 = st.columns(3)
+                col_c1.metric("Moyenne RPE (Ressenti)", f"{df_plot['RPE'].mean():.1f} / 10")
+                col_c2.metric("Moyenne Strain (Cardio)", f"{df_plot['Whoop_Strain'].mean():.1f} / 21")
+                
+                if ecart_moyen > 2:
+                    col_c3.metric("Tendance", "Surcharge Nerveuse ⚠️")
+                    st.warning("🚨 **Alerte Coach :** Raph perçoit les séances comme étant beaucoup plus dures que ce que son cœur indique.")
+                elif ecart_moyen < -2:
+                    col_c3.metric("Tendance", "Sous-évaluation 📉")
+                    st.info("💡 **Info Coach :** Le système cardio travaille très fort, mais Raph trouve la séance facile. C'est souvent un signe d'excellente forme !")
+                else:
+                    col_c3.metric("Tendance", "Cohérence Parfaite ✅")
+                    st.success("🎯 **Info Coach :** Son ressenti correspond exactement au coût physiologique.")
+            else:
+                st.info("⏳ Aucune séance avec les données Whoop n'a encore été enregistrée pour pouvoir comparer.")
+        else:
+            st.info("⏳ Les données Whoop s'afficheront ici une fois la première séance enregistrée.")
+
+        st.markdown("---")
+        st.subheader("🌅 Base de données : Gestion & Suppression")
+        
+        st.markdown("**Forme (Matin)**")
+        if not df_forme.empty:
+            st.dataframe(df_forme, use_container_width=True)
+            col_f1, col_f2 = st.columns([3, 1])
+            with col_f1:
+                index_m = st.selectbox("Ligne à supprimer (Matin) :", df_forme.index)
+            with col_f2:
+                if st.button("🗑️ Supprimer Forme", use_container_width=True):
                     supprimer_ligne_gsheets("Forme", index_m)
                     st.rerun()
-        with col_db2:
-            if not df_seances.empty:
-                index_s = st.selectbox("Ligne (Séance) :", df_seances.index)
-                if st.button("🗑️ Supprimer Séance"):
+
+        st.markdown("**Séances (sRPE)**")
+        if not df_seances.empty:
+            st.dataframe(df_seances, use_container_width=True)
+            col_s1, col_s2 = st.columns([3, 1])
+            with col_s1:
+                index_s = st.selectbox("Ligne à supprimer (Séance) :", df_seances.index)
+            with col_s2:
+                if st.button("🗑️ Supprimer Séance", use_container_width=True):
                     supprimer_ligne_gsheets("Seances", index_s)
                     st.rerun()
-        with col_db3:
-            if not df_soir.empty:
-                index_soir = st.selectbox("Ligne (Soir) :", df_soir.index)
-                if st.button("🗑️ Supprimer Bilan Soir"):
+
+        st.markdown("**Flash Soir**")
+        if not df_soir.empty:
+            st.dataframe(df_soir, use_container_width=True)
+            col_so1, col_so2 = st.columns([3, 1])
+            with col_so1:
+                index_soir = st.selectbox("Ligne à supprimer (Soir) :", df_soir.index)
+            with col_so2:
+                if st.button("🗑️ Supprimer Bilan Soir", use_container_width=True):
                     supprimer_ligne_gsheets("Soir", index_soir)
                     st.rerun()
 
