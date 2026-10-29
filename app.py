@@ -5,13 +5,10 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import requests
 
-# Configuration de la page
 st.set_page_config(page_title="Suivi de Charge RRB", page_icon="🎾", layout="wide")
 
-# Mot de passe sécurisé
 MOT_DE_PASSE_COACH = "RomainRB2004!"
 
-# --- FONCTION TELEGRAM ---
 def envoyer_telegram(message):
     try:
         token = st.secrets["TELEGRAM_TOKEN"]
@@ -19,13 +16,11 @@ def envoyer_telegram(message):
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {"chat_id": str(chat_id), "text": message}
         reponse = requests.post(url, json=payload)
-        
         if reponse.status_code != 200:
             st.error(f"❌ Telegram a bloqué l'envoi. Raison : {reponse.text}")
     except Exception as e:
         st.error(f"❌ Erreur de configuration Telegram : {e}")
 
-# --- CONNEXION GOOGLE SHEETS ---
 @st.cache_resource
 def init_connection():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -35,7 +30,6 @@ def init_connection():
     sheet = client.open("RaphSuivi_Tennis_Database")
     return sheet
 
-# OPTIMISATION : Mise en cache des données
 @st.cache_data(ttl=600)
 def charger_donnees():
     try:
@@ -51,10 +45,13 @@ def charger_donnees():
             
         try:
             df_frais = pd.DataFrame(sh.worksheet("Frais").get_all_records())
-            if not df_frais.empty and 'Statut' not in df_frais.columns:
-                df_frais['Statut'] = "Non payé"
+            if not df_frais.empty:
+                if 'Statut' not in df_frais.columns:
+                    df_frais['Statut'] = "Non payé"
+                if 'Coach' not in df_frais.columns:
+                    df_frais['Coach'] = "Romain"
         except Exception:
-            df_frais = pd.DataFrame(columns=['Date', 'Depart', 'Arrivee', 'Distance_km', 'Montant_Euros', 'Statut'])
+            df_frais = pd.DataFrame(columns=['Date', 'Depart', 'Arrivee', 'Distance_km', 'Montant_Euros', 'Statut', 'Coach'])
             
         return df_forme, df_seances, df_soir, df_tests, df_frais
     except Exception as e:
@@ -62,7 +59,7 @@ def charger_donnees():
         df_seances = pd.DataFrame(columns=['Date', 'Type', 'Duree', 'RPE', 'Charge', 'Satisfaction'])
         df_soir = pd.DataFrame(columns=['Date', 'Etat_Jour', 'Zones_Douleur_Soir', 'Type_Douleur'])
         df_tests = pd.DataFrame(columns=['Date', 'Periode', 'Test', 'Cote', 'Resultat', 'Unite', 'Objectif_Prochain'])
-        df_frais = pd.DataFrame(columns=['Date', 'Depart', 'Arrivee', 'Distance_km', 'Montant_Euros', 'Statut'])
+        df_frais = pd.DataFrame(columns=['Date', 'Depart', 'Arrivee', 'Distance_km', 'Montant_Euros', 'Statut', 'Coach'])
         return df_forme, df_seances, df_soir, df_tests, df_frais
 
 def ajouter_ligne(onglet_nom, dico_donnees):
@@ -73,8 +70,11 @@ def ajouter_ligne(onglet_nom, dico_donnees):
         except Exception:
             worksheet = sh.add_worksheet(title=onglet_nom, rows="100", cols="20")
             
-        if len(worksheet.get_all_values()) == 0:
+        en_tetes = worksheet.row_values(1)
+        if len(en_tetes) == 0:
             worksheet.append_row(list(dico_donnees.keys()))
+        elif "Coach" in dico_donnees and "Coach" not in en_tetes:
+            worksheet.update_cell(1, len(en_tetes) + 1, "Coach")
             
         worksheet.append_row(list(dico_donnees.values()))
         st.cache_data.clear()
@@ -100,7 +100,6 @@ def marquer_paye_gsheets(onglet_nom, index_ligne):
     except Exception as e:
         st.error(f"Erreur lors du passage en Payé : {e}")
 
-# Titre principal
 st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Raph Tennis : Suivi de la Performance</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #6B7280;'>Monitoring quotidien - Optimisation et Prévention</p>", unsafe_allow_html=True)
 st.divider()
@@ -116,13 +115,11 @@ ZONES_ANATOMIQUES = [
     "Ischio-jambiers", "Genoux / Rotule", "Mollets (Gros Jumeaux / Soléaire)", "Tendons d'Achille", "Chevilles / Pieds"
 ]
 
-# --- ONGLET 1 : MATIN ---
 with tab_matin:
     st.info("💡 **Consigne :** À remplir chaque matin au réveil pour adapter la charge de la journée.")
     
     st.markdown("### 📡 1. Données WHOOP (Saisie Manuelle)")
     st.caption("Recopie les informations affichées sur l'application WHOOP de ton téléphone (laisse à 0 si pas de montre).")
-    
     col_w1, col_w2 = st.columns(2)
     with col_w1:
         whoop_recup = st.number_input("🔴/🟢 Score de Récupération (%)", min_value=0, max_value=100, value=0)
@@ -133,9 +130,7 @@ with tab_matin:
         
     st.markdown("---")
     st.markdown("### 🧠 2. Ton Ressenti (Subjectif)")
-    
     date_matin = st.date_input("📅 Date du jour", value=date.today(), key="date_m")
-    
     col1, col2 = st.columns(2)
     with col1:
         sommeil = st.slider("💤 Qualité du sommeil ressentie (1=Mauvais, 5=Parfait)", 1, 5, 3)
@@ -155,14 +150,12 @@ with tab_matin:
     if st.button("✅ Valider le Check-in Matin", use_container_width=True):
         score_forme = sommeil + fatigue + stress + humeur
         zones_str = ", ".join(zones_matin) if zones_matin else "Aucune"
-        
         dico = {
             'Date': str(date_matin), 'Sommeil': sommeil, 'Fatigue': fatigue, 
             'Stress': stress, 'Humeur': humeur, 'Score_Forme': score_forme,
             'Douleur_Type': type_douleur, 'Zones_Douleur': zones_str,
             'Whoop_Score': whoop_recup, 'Whoop_VFC': whoop_vfc, 'Whoop_FC': whoop_fc
         }
-        
         ajouter_ligne("Forme", dico)
         st.success(f"🎉 Parfait ! Ton score de forme aujourd'hui est de {score_forme}/20. Enregistré !")
         
@@ -173,26 +166,21 @@ with tab_matin:
             df_f_alerte = df_f_alerte.sort_values('Date')
             df_f_alerte['Moy_7j'] = df_f_alerte['Score_Forme'].rolling(window=7, min_periods=3).mean()
             df_f_alerte['Std_7j'] = df_f_alerte['Score_Forme'].rolling(window=7, min_periods=3).std()
-            
             moyenne_f = df_f_alerte['Moy_7j'].iloc[-1]
             ecart_type_f = df_f_alerte['Std_7j'].iloc[-1]
-            
             if pd.notna(ecart_type_f) and ecart_type_f > 0:
                 z_score_f = (score_forme - moyenne_f) / ecart_type_f
                 if z_score_f <= -2:
-                    envoyer_telegram(f"🔴 ALERTE ROUGE FORME - Raph 🎾\nScore très bas ({score_forme}/20).\nChute à plus de 2 écarts-types de sa moyenne ({moyenne_f:.1f}). Fatigue centrale suspectée.")
+                    envoyer_telegram(f"🔴 ALERTE ROUGE FORME - Raph 🎾\nScore bas ({score_forme}/20).\nChute à >2 écarts-types de la moyenne ({moyenne_f:.1f}).")
                 elif z_score_f <= -1:
-                    envoyer_telegram(f"🟠 ALERTE ORANGE FORME - Raph 🎾\nBaisse de forme ({score_forme}/20).\nÀ plus de 1 écart-type sous sa moyenne ({moyenne_f:.1f}). Adapter l'échauffement.")
+                    envoyer_telegram(f"🟠 ALERTE ORANGE FORME - Raph 🎾\nBaisse de forme ({score_forme}/20).\nÀ >1 écart-type sous sa moyenne ({moyenne_f:.1f}).")
 
         if type_douleur not in ["Aucune", "Courbatures (diffuses)"]:
-            envoyer_telegram(f"🚨 ALERTE MÉDICALE MATIN - Raph 🎾\nDouleur signalée : {type_douleur}\nZone(s) : {zones_str}")
+            envoyer_telegram(f"🚨 ALERTE MÉDICALE MATIN - Raph 🎾\nDouleur : {type_douleur}\nZone(s) : {zones_str}")
 
-# --- ONGLET 2 : SÉANCES ---
 with tab_seance:
     st.info("⏱ **Rappel :** À remplir dans les 30 minutes suivant la fin de l'effort.")
-    
     date_seance = st.date_input("📅 Date de la séance", value=date.today(), key="date_s")
-    
     col_m1, col_m2 = st.columns(2)
     with col_m1:
         type_final = st.selectbox("🎾 Type de séance", ["Prépa Physique", "Tennis", "Récupération", "Match"])
@@ -201,7 +189,6 @@ with tab_seance:
         
     st.markdown("### 📡 1. Données de la Montre (Saisie Manuelle)")
     st.caption("Recopie les données de ta séance depuis l'application WHOOP (laisse à 0 si pas de montre).")
-    
     col_w1, col_w2 = st.columns(2)
     with col_w1:
         whoop_strain = st.number_input("🔥 Strain (Effort 0-21)", min_value=0.0, max_value=21.0, value=0.0, step=0.1)
@@ -212,7 +199,6 @@ with tab_seance:
         
     st.markdown("---")
     st.markdown("### 🧠 2. Ton Ressenti (Subjectif)")
-
     col3, col4 = st.columns(2)
     with col3:
         rpe = st.slider("🥵 Difficulté ressentie (RPE 1-10)", 1, 10, 5)
@@ -225,7 +211,6 @@ with tab_seance:
     if whoop_strain > 0:
         strain_sur_10 = (whoop_strain / 21) * 10
         ecart = rpe - strain_sur_10
-        
         if ecart >= 3:
             st.warning("⚠️ **Alerte Fatigue Nerveuse :** Tu as ressenti cette séance comme très dure par rapport à l'impact cardio. Signe possible d'une fatigue neuromusculaire.")
         elif ecart <= -3:
@@ -235,21 +220,14 @@ with tab_seance:
 
     if st.button("🔥 Enregistrer la séance", use_container_width=True):
         dico = {
-            'Date': str(date_seance), 
-            'Type': type_final, 
-            'Duree': duree_finale, 
-            'RPE': rpe, 
-            'Charge': charge, 
-            'Satisfaction': satisfaction,
-            'Whoop_Strain': whoop_strain, 
-            'Whoop_HR_avg': whoop_hr_avg, 
-            'Whoop_HR_max': whoop_hr_max, 
-            'Whoop_Calories': whoop_cal
+            'Date': str(date_seance), 'Type': type_final, 'Duree': duree_finale, 
+            'RPE': rpe, 'Charge': charge, 'Satisfaction': satisfaction,
+            'Whoop_Strain': whoop_strain, 'Whoop_HR_avg': whoop_hr_avg, 
+            'Whoop_HR_max': whoop_hr_max, 'Whoop_Calories': whoop_cal
         }
         ajouter_ligne("Seances", dico)
         st.success(f"📊 Séance validée ! Charge : {charge} unités.")
 
-# --- ONGLET 3 : BILAN SOIR ---
 with tab_soir:
     st.info("🌙 **Flash Soir :** Dernier bilan avant la récupération nocturne.")
     date_soir = st.date_input("📅 Date du jour", value=date.today(), key="date_soir_k")
@@ -276,7 +254,6 @@ with tab_soir:
         if "3" in etat_jour or "4" in etat_jour or type_soir not in ["RAS / Normal", "Musculaire"]:
             envoyer_telegram(f"🚨 ALERTE MÉDICALE SOIR - Raph 🎾\nBilan : {etat_jour}\nDouleur : {type_soir}\nZone(s) : {zones_soir_str}")
 
-# --- ONGLET 4 : COACH ---
 with tab_coach:
     st.markdown("### 🔐 Espace Réservé au Staff")
     saisie_mdp = st.text_input("Entrez le mot de passe administrateur :", type="password")
@@ -288,7 +265,6 @@ with tab_coach:
         
         st.markdown("---")
         st.markdown("## 🚨 Tableau de Bord des Alertes")
-        
         col_alerte1, col_alerte2 = st.columns(2)
         
         with col_alerte1:
@@ -297,10 +273,8 @@ with tab_coach:
                 df_f = df_forme.copy()
                 df_f['Date'] = pd.to_datetime(df_f['Date'])
                 df_f = df_f.sort_values('Date')
-                
                 df_f['Moy_7j'] = df_f['Score_Forme'].rolling(window=7, min_periods=3).mean()
                 df_f['Std_7j'] = df_f['Score_Forme'].rolling(window=7, min_periods=3).std()
-                
                 dernier_score = df_f['Score_Forme'].iloc[-1]
                 moyenne_f = df_f['Moy_7j'].iloc[-1]
                 ecart_type_f = df_f['Std_7j'].iloc[-1]
@@ -325,17 +299,13 @@ with tab_coach:
             if not df_seances.empty and len(df_seances) >= 3:
                 df_s = df_seances.copy()
                 df_s['Date'] = pd.to_datetime(df_s['Date'])
+                df_jour = df_s.groupby('Date')['Charge'].sum().reset_index().set_index('Date').sort_index()
                 
-                df_jour = df_s.groupby('Date')['Charge'].sum().reset_index()
-                df_jour = df_jour.set_index('Date').sort_index()
-                
-                # Injection des jours vides pour le calcul des alertes
                 idx_alerte = pd.date_range(start=df_jour.index.min(), end=pd.to_datetime(date.today()))
                 df_jour = df_jour.reindex(idx_alerte, fill_value=0)
                 
                 df_jour['Moy_21j'] = df_jour['Charge'].rolling(window=21, min_periods=3).mean()
                 df_jour['Std_21j'] = df_jour['Charge'].rolling(window=21, min_periods=3).std()
-                
                 derniere_charge = df_jour['Charge'].iloc[-1]
                 moyenne_c = df_jour['Moy_21j'].iloc[-1]
                 ecart_type_c = df_jour['Std_21j'].iloc[-1]
@@ -359,13 +329,11 @@ with tab_coach:
 
         st.markdown("---")
         st.markdown("## 🏋️‍♂️ Suivi des Évaluations Physiques (Tests)")
-        
         with st.expander("➕ Saisir un nouveau résultat de Test"):
             col_t1, col_t2 = st.columns(2)
             with col_t1:
                 date_test = st.date_input("Date du test", value=date.today(), key="d_test")
                 periode = st.selectbox("Période d'évaluation", ["Test Initial (Septembre)", "Test Intermédiaire (Hiver)", "Test Final (Printemps)"])
-                
                 nom_test = st.selectbox("Type de Test", [
                     "VMA", "Sprint 10m", "Suicide", "Taille", "Taille bras levés", "Poids", "Envergure",
                     "Mobilité - Cheville", "Mobilité - Ischio (doigt par terre)", "Mobilité - Quadri (touche fesse)",
@@ -373,7 +341,6 @@ with tab_coach:
                     "Triple saut sur 1 pied sans élan", "Tour de 4 plots aller-retour (5m d'écart)"
                 ])
                 cote = st.selectbox("Côté / Jambe (si applicable)", ["Aucun / Bilatéral", "Droite", "Gauche"])
-                
             with col_t2:
                 resultat = st.number_input("Résultat obtenu", format="%.2f", step=0.1)
                 unite = st.text_input("Unité (ex: sec, cm, kg, palier)")
@@ -402,7 +369,6 @@ with tab_coach:
 
         st.markdown("---")
         st.markdown("## 📈 Tableaux de Bord & Sommes Glissantes")
-        
         col_g1, col_g2 = st.columns(2)
         
         with col_g1:
@@ -425,20 +391,14 @@ with tab_coach:
                 
                 if vue_charge == "Séances (Empilé)":
                     df_pivot = df_s.pivot_table(index='Date', columns='Type', values='Charge', aggfunc='sum').fillna(0)
-                    
-                    # Injection des jours vides pour le graphique
                     idx_pivot = pd.date_range(start=df_pivot.index.min(), end=pd.to_datetime(date.today()))
                     df_pivot = df_pivot.reindex(idx_pivot, fill_value=0)
-                    
                     df_pivot.index = df_pivot.index.strftime('%Y-%m-%d')
                     st.bar_chart(df_pivot)
                 else:
                     df_jour = df_s.groupby('Date')['Charge'].sum().reset_index().set_index('Date').sort_index()
-                    
-                    # Injection des jours vides pour le graphique
                     idx_jour = pd.date_range(start=df_jour.index.min(), end=pd.to_datetime(date.today()))
                     df_jour = df_jour.reindex(idx_jour, fill_value=0)
-                    
                     df_glissant = df_jour.rolling(window='7D', min_periods=1).sum()
                     df_glissant.index = df_glissant.index.strftime('%Y-%m-%d')
                     st.line_chart(df_glissant)
@@ -447,7 +407,6 @@ with tab_coach:
 
         st.markdown("---")
         st.markdown("## 🧠 Analyse Avancée : Ressenti (sRPE) vs Réel (WHOOP)")
-        
         if not df_seances.empty and 'Whoop_Strain' in df_seances.columns:
             df_plot = df_seances[pd.to_numeric(df_seances['Whoop_Strain'], errors='coerce') > 0].copy()
             if not df_plot.empty:
@@ -471,12 +430,12 @@ with tab_coach:
                     st.warning("🚨 **Alerte Coach :** Raph perçoit les séances comme étant beaucoup plus dures que ce que son cœur indique.")
                 elif ecart_moyen < -2:
                     col_c3.metric("Tendance", "Sous-évaluation 📉")
-                    st.info("💡 **Info Coach :** Le système cardio travaille très fort, mais Raph trouve la séance facile. C'est souvent un signe d'excellente forme !")
+                    st.info("💡 **Info Coach :** Le système cardio travaille très fort, mais Raph trouve la séance facile.")
                 else:
                     col_c3.metric("Tendance", "Cohérence Parfaite ✅")
                     st.success("🎯 **Info Coach :** Son ressenti correspond exactement au coût physiologique.")
             else:
-                st.info("⏳ Aucune séance avec les données Whoop n'a encore été enregistrée pour pouvoir comparer.")
+                st.info("⏳ Aucune séance avec les données Whoop n'a encore été enregistrée.")
         else:
             st.info("⏳ Les données Whoop s'afficheront ici une fois la première séance enregistrée.")
 
@@ -516,41 +475,39 @@ with tab_coach:
                     supprimer_ligne_gsheets("Soir", index_soir)
                     st.rerun()
 
-        # ==========================================
-        # --- SECTION : GESTION DES FRAIS ---
-        # ==========================================
         st.markdown("---")
-        st.markdown("## 🚗 Registre des Frais Kilométriques")
+        st.markdown("## 🚗 Registre des Frais Kilométriques (Multi-Coach)")
         st.info("💡 Barème appliqué : 0,665 € / km. Les données s'additionnent jusqu'à ce qu'elles soient marquées comme PAYÉES.")
         
         if not df_frais.empty:
             df_frais['Distance_km'] = df_frais['Distance_km'].astype(str).str.replace(',', '.').apply(pd.to_numeric, errors='coerce').fillna(0)
             df_frais['Montant_Euros'] = df_frais['Montant_Euros'].astype(str).str.replace(',', '.').apply(pd.to_numeric, errors='coerce').fillna(0)
+            if 'Coach' not in df_frais.columns:
+                df_frais['Coach'] = 'Romain'
 
         lieux_connus = []
         if not df_frais.empty and 'Depart' in df_frais.columns and 'Arrivee' in df_frais.columns:
             tous_lieux = pd.concat([df_frais['Depart'], df_frais['Arrivee']]).dropna().unique().tolist()
             lieux_connus = sorted([L for L in tous_lieux if L != ""])
-        
         options_lieux = ["--- Nouveau lieu ---"] + lieux_connus
 
         with st.expander("➕ Saisir un nouveau déplacement (Match/Tournoi)"):
             with st.form("form_frais"):
                 date_trajet = st.date_input("📅 Date du trajet", value=date.today(), key="date_frais")
-                
                 col_f1, col_f2 = st.columns(2)
                 with col_f1:
                     choix_depart = st.selectbox("📍 Départ (Choix rapide)", options_lieux, index=0)
                     saisie_depart = st.text_input("Ou saisir un nouveau départ :", disabled=(choix_depart != "--- Nouveau lieu ---"))
-                    
                 with col_f2:
                     choix_arrivee = st.selectbox("🏁 Arrivée (Choix rapide)", options_lieux, index=0)
                     saisie_arrivee = st.text_input("Ou saisir une nouvelle arrivée :", disabled=(choix_arrivee != "--- Nouveau lieu ---"))
                 
-                col_d1, col_d2 = st.columns(2)
+                col_d1, col_d2, col_d3 = st.columns([1.5, 1.5, 2])
                 with col_d1:
-                    distance_km = st.number_input("📏 Distance d'un aller (en km)", min_value=0.0, step=1.0)
+                    distance_km = st.number_input("📏 Distance d'un aller (km)", min_value=0.0, step=1.0)
                 with col_d2:
+                    coach_choisi = st.selectbox("👤 Coach responsable", ["Romain", "Luca"])
+                with col_d3:
                     st.write("")
                     st.write("")
                     aller_retour = st.checkbox("🔄 Trajet Aller-Retour (Double automatiquement la distance)")
@@ -560,42 +517,35 @@ with tab_coach:
             if ajouter_frais:
                 depart_final = saisie_depart if choix_depart == "--- Nouveau lieu ---" else choix_depart
                 arrivee_final = saisie_arrivee if choix_arrivee == "--- Nouveau lieu ---" else choix_arrivee
-
                 if distance_km > 0 and depart_final.strip() != "" and arrivee_final.strip() != "":
                     dist_totale = distance_km * 2 if aller_retour else distance_km
                     montant = dist_totale * 0.665
-                    
-                    distance_str = f"{dist_totale:.1f}"
-                    montant_str = f"{montant:.2f}"
-                    
                     dico_frais = {
                         'Date': str(date_trajet),
                         'Depart': depart_final.strip(),
                         'Arrivee': arrivee_final.strip(),
-                        'Distance_km': distance_str, 
-                        'Montant_Euros': montant_str,
-                        'Statut': 'Non payé'
+                        'Distance_km': f"{dist_totale:.1f}", 
+                        'Montant_Euros': f"{montant:.2f}",
+                        'Statut': 'Non payé',
+                        'Coach': coach_choisi
                     }
                     ajouter_ligne("Frais", dico_frais)
-                    st.success("Déplacement enregistré en attente de paiement !")
+                    st.success(f"Déplacement attribué à {coach_choisi} enregistré en attente de paiement !")
                     st.rerun()
                 else:
                     st.error("⚠️ Veuillez remplir les lieux et indiquer une distance > 0.")
         
-        # --- HISTORIQUE GLOBAL DES FRAIS ---
-        st.markdown("### 🗃️ Historique Global (Payés & Non Payés)")
+        st.markdown("### 🗃️ Historique Global (Tous les coachs)")
         if not df_frais.empty:
-            total_restant = df_frais[df_frais['Statut'] != 'Payé']['Montant_Euros'].sum()
-            total_paye = df_frais[df_frais['Statut'] == 'Payé']['Montant_Euros'].sum()
-            
             lignes_html = ""
             for idx, row in df_frais.iterrows():
                 badge_statut = "<span style='color: #10B981; font-weight: bold;'>✅ Payé</span>" if row['Statut'] == 'Payé' else "<span style='color: #EF4444; font-weight: bold;'>⏳ En attente</span>"
-                
+                coach_nom = row.get('Coach', 'Romain')
                 lignes_html += f"""<tr>
 <td style="padding: 10px; border-bottom: 1px solid #D1D5DB;">{row['Date']}</td>
 <td style="padding: 10px; border-bottom: 1px solid #D1D5DB;">{row['Depart']} ➡️ {row['Arrivee']}</td>
 <td style="padding: 10px; border-bottom: 1px solid #D1D5DB; text-align: center;">{row['Distance_km']:.1f} km</td>
+<td style="padding: 10px; border-bottom: 1px solid #D1D5DB; text-align: center;"><b>{coach_nom}</b></td>
 <td style="padding: 10px; border-bottom: 1px solid #D1D5DB; text-align: center;">{badge_statut}</td>
 <td style="padding: 10px; border-bottom: 1px solid #D1D5DB; text-align: right;"><b>{row['Montant_Euros']:.2f} €</b></td>
 </tr>"""
@@ -607,6 +557,7 @@ with tab_coach:
 <th style="padding: 8px; text-align: left;">Date</th>
 <th style="padding: 8px; text-align: left;">Trajet</th>
 <th style="padding: 8px; text-align: center;">Distance</th>
+<th style="padding: 8px; text-align: center;">Coach</th>
 <th style="padding: 8px; text-align: center;">Statut</th>
 <th style="padding: 8px; text-align: right;">Montant</th>
 </tr>
@@ -615,21 +566,18 @@ with tab_coach:
 {lignes_html}
 </tbody>
 </table>
-<div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
-<span style="color: #6B7280; font-size: 14px;">Déjà remboursé : <b>{total_paye:.2f} €</b></span>
-<span style="color: #EF4444; font-size: 16px;">Reste à payer (Total) : <b>{total_restant:.2f} €</b></span>
-</div>
 </div>"""
             st.markdown(historique_html, unsafe_allow_html=True)
             
-            # --- FACTURE POUR LES PARENTS (UNIQUEMENT IMPAYÉS) ---
-            st.markdown("### 📨 Édition de la Note de Frais")
-            df_impayes = df_frais[df_frais['Statut'] != 'Payé']
+            st.markdown("### 📨 Édition de la Note de Frais par Coach")
+            choix_facture_coach = st.radio("Sélectionnez le coach pour qui générer la facture :", ["Romain", "Luca"], horizontal=True)
+            df_impayes_coach = df_frais[(df_frais['Statut'] != 'Payé') & (df_frais['Coach'] == choix_facture_coach)]
             
-            if not df_impayes.empty:
-                if st.button("📄 Générer la note de frais officielle (Impayés)", use_container_width=True):
+            if not df_impayes_coach.empty:
+                total_restant_coach = df_impayes_coach['Montant_Euros'].sum()
+                if st.button(f"📄 Générer la note de frais de {choix_facture_coach}", use_container_width=True):
                     lignes_impayes_html = ""
-                    for idx, row in df_impayes.iterrows():
+                    for idx, row in df_impayes_coach.iterrows():
                         lignes_impayes_html += f"""<tr>
 <td style="padding: 10px; border-bottom: 1px solid #E5E7EB;">{row['Date']}</td>
 <td style="padding: 10px; border-bottom: 1px solid #E5E7EB;">{row['Depart']} ➡️ {row['Arrivee']}</td>
@@ -639,14 +587,14 @@ with tab_coach:
 
                     facture_parents = f"""<div style="border: 2px solid #1E3A8A; padding: 30px; border-radius: 10px; background-color: #FFFFFF; margin-top: 15px; box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);">
 <h2 style="text-align: center; color: #1E3A8A; margin-top: 0; margin-bottom: 5px;">🎾 NOTE DE FRAIS - DÉPLACEMENTS SPORTIFS</h2>
-<h4 style="text-align: center; color: #374151; margin-top: 0; font-weight: normal;">Athlète : <b>Raph</b> | À l'attention des parents</h4>
+<h4 style="text-align: center; color: #374151; margin-top: 0; font-weight: normal;">Athlète : <b>Raph</b> | Accompagnateur : <b>{choix_facture_coach}</b></h4>
 <p style="text-align: center; color: #6B7280; font-size: 14px; margin-top: 10px;">Document édité le : {date.today().strftime('%d/%m/%Y')} <br> Barème appliqué : 0,665 € / km</p>
 <hr style="border-top: 2px solid #1E3A8A; margin: 25px 0;">
 <table style="width: 100%; font-size: 15px; border-collapse: collapse; margin-bottom: 30px; color: #111827;">
 <thead>
 <tr style="background-color: #F3F4F6; text-transform: uppercase; font-size: 13px; color: #1E3A8A;">
 <th style="padding: 12px; text-align: left;">Date</th>
-<th style="padding: 12px; text-align: left;">Trajet (Aller-Retour compris si applicable)</th>
+<th style="padding: 12px; text-align: left;">Trajet (Aller-Retour)</th>
 <th style="padding: 12px; text-align: center;">Distance</th>
 <th style="padding: 12px; text-align: right;">Montant</th>
 </tr>
@@ -656,21 +604,19 @@ with tab_coach:
 </tbody>
 </table>
 <div style="background-color: #1E3A8A; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
-<span style="color: white; font-size: 16px;">Nombre de trajets : {len(df_impayes)}</span>
-<h1 style="color: white; margin: 0; font-size: 28px;">NET À PAYER : {total_restant:.2f} €</h1>
+<span style="color: white; font-size: 16px;">Nombre de trajets : {len(df_impayes_coach)}</span>
+<h1 style="color: white; margin: 0; font-size: 28px;">NET À PAYER : {total_restant_coach:.2f} €</h1>
 </div>
-<p style="text-align: center; color: #6B7280; font-size: 13px; margin-top: 20px; font-style: italic;">Merci de procéder au règlement de cette note de frais. <br>Le Coach.</p>
+<p style="text-align: center; color: #6B7280; font-size: 13px; margin-top: 20px; font-style: italic;">Merci de procéder au règlement de cette note de frais. <br><b>{choix_facture_coach}</b></p>
 </div>"""
                     st.markdown(facture_parents, unsafe_allow_html=True)
                     st.balloons()
             else:
-                st.success("✅ Tous les trajets ont été réglés. Aucune facture en attente !")
+                st.success(f"✅ Tous les trajets de {choix_facture_coach} ont été réglés. Aucune facture en attente !")
             
-            # --- ACTIONS : GÉRER LES STATUTS ---
             st.markdown("<br>", unsafe_allow_html=True)
             with st.expander("⚙️ Marquer comme PAYÉ ou Supprimer un trajet"):
                 st.dataframe(df_frais, use_container_width=True)
-                
                 col_act1, col_act2, col_act3 = st.columns([2, 1, 1])
                 with col_act1:
                     index_action = st.selectbox("Sélectionner la ligne concernée :", df_frais.index, key="action_frais")
