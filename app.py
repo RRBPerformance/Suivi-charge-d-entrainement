@@ -640,4 +640,86 @@ with tab_coach:
 </div>"""
                 st.markdown(historique_html, unsafe_allow_html=True)
                 
-                st.markdown("### 📨 Édition de la Note de Frais
+                st.markdown("### 📨 Édition de la Note de Frais par Coach")
+                choix_facture_coach = st.radio("Sélectionnez le coach pour qui générer la facture :", ["Romain", "Luca"], horizontal=True)
+                df_impayes_coach = df_frais[(df_frais['Statut'] != 'Payé') & (df_frais['Coach'] == choix_facture_coach)]
+                
+                if not df_impayes_coach.empty:
+                    total_restant_coach = df_impayes_coach['Montant_Euros'].sum()
+                    if st.button(f"📄 Générer la note de frais de {choix_facture_coach}", use_container_width=True):
+                        lignes_impayes_html = ""
+                        for idx, row in df_impayes_coach.iterrows():
+                            lignes_impayes_html += f"""<tr>
+<td style="padding: 10px; border-bottom: 1px solid #E5E7EB;">{row['Date']}</td>
+<td style="padding: 10px; border-bottom: 1px solid #E5E7EB;">{row['Depart']} ➡️ {row['Arrivee']}</td>
+<td style="padding: 10px; border-bottom: 1px solid #E5E7EB; text-align: center;">{row['Distance_km']:.1f} km</td>
+<td style="padding: 10px; border-bottom: 1px solid #E5E7EB; text-align: right;"><b>{row['Montant_Euros']:.2f} €</b></td>
+</tr>"""
+
+                        facture_parents = f"""<div style="border: 2px solid #1E3A8A; padding: 30px; border-radius: 10px; background-color: #FFFFFF; margin-top: 15px; box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);">
+<h2 style="text-align: center; color: #1E3A8A; margin-top: 0; margin-bottom: 5px;">🎾 NOTE DE FRAIS - DÉPLACEMENTS SPORTIFS</h2>
+<h4 style="text-align: center; color: #374151; margin-top: 0; font-weight: normal;">Athlète : <b>Raph</b> | Accompagnateur : <b>{choix_facture_coach}</b></h4>
+<p style="text-align: center; color: #6B7280; font-size: 14px; margin-top: 10px;">Document édité le : {date.today().strftime('%d/%m/%Y')} <br> Barème appliqué : 0,665 € / km</p>
+<hr style="border-top: 2px solid #1E3A8A; margin: 25px 0;">
+<table style="width: 100%; font-size: 15px; border-collapse: collapse; margin-bottom: 30px; color: #111827;">
+<thead>
+<tr style="background-color: #F3F4F6; text-transform: uppercase; font-size: 13px; color: #1E3A8A;">
+<th style="padding: 12px; text-align: left;">Date</th>
+<th style="padding: 12px; text-align: left;">Trajet (Aller-Retour)</th>
+<th style="padding: 12px; text-align: center;">Distance</th>
+<th style="padding: 12px; text-align: right;">Montant</th>
+</tr>
+</thead>
+<tbody>
+{lignes_impayes_html}
+</tbody>
+</table>
+<div style="background-color: #1E3A8A; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+<span style="color: white; font-size: 16px;">Nombre de trajets : {len(df_impayes_coach)}</span>
+<h1 style="color: white; margin: 0; font-size: 28px;">NET À PAYER : {total_restant_coach:.2f} €</h1>
+</div>
+<p style="text-align: center; color: #6B7280; font-size: 13px; margin-top: 20px; font-style: italic;">Merci de procéder au règlement de cette note de frais. <br><b>{choix_facture_coach}</b></p>
+</div>"""
+                        st.markdown(facture_parents, unsafe_allow_html=True)
+                        st.balloons()
+            else:
+                st.info("Aucun frais kilométrique enregistré pour l'instant.")
+
+            st.markdown("---")
+            st.subheader("🌅 Base de données : Gestion & Suppression")
+            
+            st.markdown("**Forme (Matin)**")
+            if not df_forme.empty:
+                st.dataframe(df_forme, use_container_width=True)
+                col_f1, col_f2 = st.columns([3, 1])
+                with col_f1:
+                    index_m = st.selectbox("Ligne à supprimer (Matin) :", df_forme.index)
+                with col_f2:
+                    if st.button("🗑️ Supprimer Forme", use_container_width=True):
+                        supprimer_ligne_gsheets("Forme", index_m)
+                        st.rerun()
+
+            st.markdown("**Séances (Toutes)**")
+            if not df_seances.empty:
+                st.dataframe(df_seances, use_container_width=True)
+                col_s1, col_s2 = st.columns([3, 1])
+                with col_s1:
+                    index_s = st.selectbox("Ligne à supprimer (Séance) :", df_seances.index)
+                with col_s2:
+                    if st.button("🗑️ Supprimer Séance", use_container_width=True):
+                        supprimer_ligne_gsheets("Seances", index_s)
+                        st.rerun()
+
+            st.markdown("**Flash Soir**")
+            if not df_soir.empty:
+                st.dataframe(df_soir, use_container_width=True)
+                col_so1, col_so2 = st.columns([3, 1])
+                with col_so1:
+                    index_soir = st.selectbox("Ligne à supprimer (Soir) :", df_soir.index)
+                with col_so2:
+                    if st.button("🗑️ Supprimer Bilan Soir", use_container_width=True):
+                        supprimer_ligne_gsheets("Soir", index_soir)
+                        st.rerun()
+
+    elif saisie_mdp != "":
+        st.error("❌ Mot de passe incorrect.")
