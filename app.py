@@ -115,7 +115,7 @@ st.divider()
 
 df_forme, df_seances, df_soir, df_tests, df_frais = charger_donnees()
 
-tab_matin, tab_soir, tab_coach = st.tabs(["🌅 Check-in Matin", "🌙 Flash Soir", "🔐 Espace Coach"])
+tab_matin, tab_seance, tab_soir, tab_coach = st.tabs(["🌅 Check-in Matin", "👟 Bilan Séance", "🌙 Flash Soir", "🔐 Espace Coach"])
 
 ZONES_ANATOMIQUES = [
     "Tête / Mâchoire", "Cervicales / Cou", "Trapèzes", "Épaules", "Biceps", "Triceps", "Coudes", 
@@ -191,7 +191,54 @@ with tab_matin:
             envoyer_telegram(f"🚨 ALERTE MÉDICALE MATIN - Raph 🎾\nDouleur signalée : {type_douleur}\nZone(s) : {zones_str}")
 
 # ==========================================
-# --- ONGLET 2 : SOIR (JOUEUR) ---
+# --- ONGLET 2 : BILAN SÉANCE (JOUEUR) ---
+# ==========================================
+with tab_seance:
+    st.info("⏱ **Rappel Joueur :** À remplir dans les 30 minutes suivant la fin de l'effort pour consigner tes métriques WHOOP et tes ressentis.")
+    date_seance_j = st.date_input("📅 Date de la séance", value=date.today(), key="date_sj")
+    
+    st.markdown("### 📡 Données WHOOP (Saisie Joueur)")
+    col_wj1, col_wj2, col_wj3, col_wj4 = st.columns(4)
+    with col_wj1:
+        whoop_strain_j = st.number_input("🔥 Strain (0-21)", min_value=0.0, max_value=21.0, value=0.0, step=0.1, key="ws_j")
+    with col_wj2:
+        whoop_cal_j = st.number_input("⚡ Énergie (kcal)", min_value=0, value=0, key="wc_j")
+    with col_wj3:
+        whoop_hr_avg_j = st.number_input("💓 FC Moyenne (bpm)", min_value=0, value=0, key="wha_j")
+    with col_wj4:
+        whoop_hr_max_j = st.number_input("🚨 FC Max (bpm)", min_value=0, value=0, key="whm_j")
+
+    st.markdown("### 🧠 Ressenti & Commentaires")
+    col_rj1, col_rj2 = st.columns(2)
+    with col_rj1:
+        rpe_j = st.slider("🥵 Difficulté ressentie (RPE 1-10)", 1, 10, 5, key="rpe_j")
+    with col_rj2:
+        satisfaction_j = st.slider("🎯 Satisfaction (1-5)", 1, 5, 3, key="sat_j")
+
+    contenu_detaille_j = st.text_area("Détail de ce que tu as réalisé :", height=80, key="cont_j", placeholder="Exercices, séries, charges...")
+    remarques_j = st.text_area("Remarques éventuelles (gêne, sensations...) :", height=50, key="rem_j", placeholder="Optionnel...")
+
+    if st.button("✅ Valider mon Bilan Séance", use_container_width=True):
+        dico_j = {
+            'Date': str(date_seance_j),
+            'Type': "Séance Joueur",
+            'Contenu_General': "Libre / Autre",
+            'Duree': 90,
+            'RPE': rpe_j,
+            'Charge': 90 * rpe_j,
+            'Satisfaction': satisfaction_j,
+            'Whoop_Strain': whoop_strain_j,
+            'Whoop_HR_avg': whoop_hr_avg_j,
+            'Whoop_HR_max': whoop_hr_max_j,
+            'Whoop_Calories': whoop_cal_j,
+            'Contenu': contenu_detaille_j.strip(),
+            'Remarques': remarques_j.strip()
+        }
+        ajouter_ligne("Seances", dico_j)
+        st.success("🎯 Bilan de séance enregistré avec succès dans la base commune !")
+
+# ==========================================
+# --- ONGLET 3 : SOIR (JOUEUR) ---
 # ==========================================
 with tab_soir:
     st.info("🌙 **Flash Soir :** Dernier bilan avant la récupération nocturne.")
@@ -220,7 +267,7 @@ with tab_soir:
             envoyer_telegram(f"🚨 ALERTE MÉDICALE SOIR - Raph 🎾\nBilan : {etat_jour}\nDouleur : {type_soir}\nZone(s) : {zones_soir_str}")
 
 # ==========================================
-# --- ONGLET 3 : ESPACE COACH (STAFF) ---
+# --- ONGLET 4 : ESPACE COACH (STAFF) ---
 # ==========================================
 with tab_coach:
     st.markdown("### 🔐 Accès Espace Staff")
@@ -370,9 +417,9 @@ with tab_coach:
 
         # --- SOUS-ONGLET 2 : PHYSIQUE (ROMAIN) ---
         with tab_c_romain:
-            st.markdown("## 🏋️‍♂️ Saisie & Suivi de la Préparation Physique")
+            st.markdown("## 🏋️‍♂️ Saisie & Suivi de la Préparation Physique (Coach)")
             
-            with st.expander("➕ Enregistrer une séance de Prépa Physique (Saisie Coach)"):
+            with st.expander("➕ Enregistrer une séance de Prépa Physique"):
                 with st.form("form_saisie_physique"):
                     date_seance_c = st.date_input("📅 Date de la séance", value=date.today(), key="date_sc_p")
                     col_sc1, col_sc2 = st.columns(2)
@@ -384,19 +431,9 @@ with tab_coach:
                     contenu_detaille_c = st.text_area("Contenu détaillé de la séance :", height=80, key="cont_p")
                     remarques_c = st.text_area("Remarques / Observations du coach :", height=50, key="rem_p")
 
-                    col_w1, col_w2, col_w3, col_w4 = st.columns(4)
-                    with col_w1:
-                        whoop_strain_c = st.number_input("🔥 Strain (0-21)", min_value=0.0, max_value=21.0, value=0.0, step=0.1, key="ws_p")
-                    with col_w2:
-                        whoop_cal_c = st.number_input("⚡ Énergie (kcal)", min_value=0, value=0, key="wc_p")
-                    with col_w3:
-                        whoop_hr_avg_c = st.number_input("💓 FC Moyenne", min_value=0, value=0, key="wha_p")
-                    with col_w4:
-                        whoop_hr_max_c = st.number_input("🚨 FC Max", min_value=0, value=0, key="whm_p")
-
                     col_r1, col_r2 = st.columns(2)
                     with col_r1:
-                        rpe_c = st.slider("🥵 Difficulté ressentie (RPE 1-10)", 1, 10, 5, key="rpe_p")
+                        rpe_c = st.slider("🥵 Difficulté (RPE 1-10)", 1, 10, 5, key="rpe_p")
                     with col_r2:
                         satisfaction_c = st.slider("🎯 Satisfaction (1-5)", 1, 5, 3, key="sat_p")
 
@@ -412,10 +449,10 @@ with tab_coach:
                         'RPE': rpe_c, 
                         'Charge': charge_c, 
                         'Satisfaction': satisfaction_c,
-                        'Whoop_Strain': whoop_strain_c, 
-                        'Whoop_HR_avg': whoop_hr_avg_c, 
-                        'Whoop_HR_max': whoop_hr_max_c, 
-                        'Whoop_Calories': whoop_cal_c,
+                        'Whoop_Strain': 0.0, 
+                        'Whoop_HR_avg': 0, 
+                        'Whoop_HR_max': 0, 
+                        'Whoop_Calories': 0,
                         'Contenu': contenu_detaille_c.strip(),
                         'Remarques': remarques_c.strip()
                     }
@@ -478,9 +515,9 @@ with tab_coach:
 
         # --- SOUS-ONGLET 3 : TENNIS (LUCA) ---
         with tab_c_luca:
-            st.markdown("## 🎾 Saisie & Suivi des Entraînements Tennis")
+            st.markdown("## 🎾 Saisie & Suivi des Entraînements Tennis (Coach)")
             
-            with st.expander("➕ Enregistrer une séance de Tennis / Match (Saisie Coach)"):
+            with st.expander("➕ Enregistrer une séance de Tennis / Match"):
                 with st.form("form_saisie_tennis"):
                     date_tennis_c = st.date_input("📅 Date de la séance", value=date.today(), key="date_sc_t")
                     col_tc1, col_tc2 = st.columns(2)
@@ -493,21 +530,11 @@ with tab_coach:
                     contenu_detaille_t = st.text_area("Contenu détaillé de la séance / Match :", height=80, key="cont_t")
                     remarques_t = st.text_area("Remarques / Bilan technique ou tactique :", height=50, key="rem_t")
 
-                    col_wt1, col_wt2, col_wt3, col_wt4 = st.columns(4)
-                    with col_wt1:
-                        whoop_strain_t = st.number_input("🔥 Strain (0-21)", min_value=0.0, max_value=21.0, value=0.0, step=0.1, key="ws_t")
-                    with col_wt2:
-                        whoop_cal_t = st.number_input("⚡ Énergie (kcal)", min_value=0, value=0, key="wc_t")
-                    with col_wt3:
-                        whoop_hr_avg_t = st.number_input("💓 FC Moyenne", min_value=0, value=0, key="wha_t")
-                    with col_wt4:
-                        whoop_hr_max_t = st.number_input("🚨 FC Max", min_value=0, value=0, key="whm_t")
-
                     col_rt1, col_rt2 = st.columns(2)
                     with col_rt1:
-                        rpe_t = st.slider("🥵 Difficulté ressentie (RPE 1-10)", 1, 10, 5, key="rpe_t")
+                        rpe_t = st.slider("🥵 Difficulté (RPE 1-10)", 1, 10, 5, key="rpe_t")
                     with col_rt2:
-                        satisfaction_t = st.slider("🎯 Satisfaction technique/tactique (1-5)", 1, 5, 3, key="sat_t")
+                        satisfaction_t = st.slider("🎯 Satisfaction (1-5)", 1, 5, 3, key="sat_t")
 
                     valider_seance_tennis = st.form_submit_button("🔥 Enregistrer la séance de Tennis", use_container_width=True)
 
@@ -521,10 +548,10 @@ with tab_coach:
                         'RPE': rpe_t, 
                         'Charge': charge_t, 
                         'Satisfaction': satisfaction_t,
-                        'Whoop_Strain': whoop_strain_t, 
-                        'Whoop_HR_avg': whoop_hr_avg_t, 
-                        'Whoop_HR_max': whoop_hr_max_t, 
-                        'Whoop_Calories': whoop_cal_t,
+                        'Whoop_Strain': 0.0, 
+                        'Whoop_HR_avg': 0, 
+                        'Whoop_HR_max': 0, 
+                        'Whoop_Calories': 0,
                         'Contenu': contenu_detaille_t.strip(),
                         'Remarques': remarques_t.strip()
                     }
