@@ -115,7 +115,7 @@ st.divider()
 
 df_forme, df_seances, df_soir, df_tests, df_frais = charger_donnees()
 
-tab_matin, tab_seance, tab_soir, tab_coach = st.tabs(["🌅 Check-in Matin", "👟 Bilan Séance", "🌙 Flash Soir", "🔐 Espace Coach"])
+tab_matin, tab_soir, tab_coach = st.tabs(["🌅 Check-in Matin", "🌙 Flash Soir", "🔐 Espace Coach"])
 
 ZONES_ANATOMIQUES = [
     "Tête / Mâchoire", "Cervicales / Cou", "Trapèzes", "Épaules", "Biceps", "Triceps", "Coudes", 
@@ -191,78 +191,7 @@ with tab_matin:
             envoyer_telegram(f"🚨 ALERTE MÉDICALE MATIN - Raph 🎾\nDouleur signalée : {type_douleur}\nZone(s) : {zones_str}")
 
 # ==========================================
-# --- ONGLET 2 : SÉANCE (JOUEUR) ---
-# ==========================================
-with tab_seance:
-    st.info("⏱ **Rappel Joueur :** À remplir dans les 30 minutes suivant la fin de l'effort.")
-    date_seance = st.date_input("📅 Date de la séance", value=date.today(), key="date_s")
-    
-    col_s1, col_s2, col_s3 = st.columns(3)
-    with col_s1:
-        type_final = st.selectbox("🎾 Type de séance :", ["Prépa Physique", "Entraînement Tennis", "Match Officiel", "Match Amical", "Récupération"])
-    with col_s2:
-        contenu_general = st.selectbox("🎯 Thème / Contenu général :", [
-            "Musculation Haut", "Musculation Bas", "Cardio / Aérobie", "Vitesse / Explosivité", 
-            "Technique Tennis", "Tactique / Points", "Panier / Gammes", "Prévention / Mobilité", "Mixte / Autre"
-        ])
-    with col_s3:
-        duree_finale = st.number_input("⏱️ Durée (minutes)", min_value=1, value=90, step=15)
-        
-    st.markdown("### 📝 Contenu & Ressenti de la séance")
-    contenu_detaille = st.text_area("Détail de la séance réalisée (exercices, séries, répétitions, charges utilisées...) :", height=100, placeholder="Ex: Squat 3x10 @ 60kg, Développé couché 3x10 @ 20kg...")
-    remarques = st.text_area("Remarques / Sensation personnelle (gêne, météo, fatigue...) :", height=60, placeholder="Ex: Légère gêne au coude sur le dernier exercice...")
-
-    st.markdown("### 🧠 Ton Ressenti (Subjectif)")
-    col3, col4 = st.columns(2)
-    with col3:
-        rpe = st.slider("🥵 Difficulté ressentie (RPE 1-10)", 1, 10, 5)
-    with col4:
-        satisfaction = st.slider("🎯 Satisfaction technique/tactique (1-5)", 1, 5, 3)
-
-    st.markdown("### 📡 Données WHOOP (Si montre portée)")
-    col_w1, col_w2, col_w3, col_w4 = st.columns(4)
-    with col_w1:
-        whoop_strain = st.number_input("🔥 Strain (0-21)", min_value=0.0, max_value=21.0, value=0.0, step=0.1)
-    with col_w2:
-        whoop_cal = st.number_input("⚡ Énergie (kcal)", min_value=0, value=0)
-    with col_w3:
-        whoop_hr_avg = st.number_input("💓 FC Moyenne (bpm)", min_value=0, value=0)
-    with col_w4:
-        whoop_hr_max = st.number_input("🚨 FC Max (bpm)", min_value=0, value=0)
-
-    charge = duree_finale * rpe
-    
-    if whoop_strain > 0:
-        strain_sur_10 = (whoop_strain / 21) * 10
-        ecart = rpe - strain_sur_10
-        if ecart >= 3:
-            st.warning("⚠️ **Alerte Fatigue Nerveuse :** Tu as ressenti cette séance comme très dure par rapport à l'impact cardio. Signe possible d'une fatigue neuromusculaire.")
-        elif ecart <= -3:
-            st.warning("⚠️ **Alerte Surcharge :** La séance t'a paru facile, mais ton organisme a pris un gros impact cardio (Strain élevé).")
-        else:
-            st.success("✅ **Cohérence parfaite :** Ton ressenti correspond à la dépense mesurée.")
-
-    if st.button("🔥 Enregistrer la séance", use_container_width=True):
-        dico = {
-            'Date': str(date_seance), 
-            'Type': type_final, 
-            'Contenu_General': contenu_general,
-            'Duree': duree_finale, 
-            'RPE': rpe, 
-            'Charge': charge, 
-            'Satisfaction': satisfaction,
-            'Whoop_Strain': whoop_strain, 
-            'Whoop_HR_avg': whoop_hr_avg, 
-            'Whoop_HR_max': whoop_hr_max, 
-            'Whoop_Calories': whoop_cal,
-            'Contenu': contenu_detaille.strip(),
-            'Remarques': remarques.strip()
-        }
-        ajouter_ligne("Seances", dico)
-        st.success(f"📊 Séance enregistrée avec succès ! Charge ajoutée : {charge} unités.")
-
-# ==========================================
-# --- ONGLET 3 : SOIR (JOUEUR) ---
+# --- ONGLET 2 : SOIR (JOUEUR) ---
 # ==========================================
 with tab_soir:
     st.info("🌙 **Flash Soir :** Dernier bilan avant la récupération nocturne.")
@@ -291,7 +220,7 @@ with tab_soir:
             envoyer_telegram(f"🚨 ALERTE MÉDICALE SOIR - Raph 🎾\nBilan : {etat_jour}\nDouleur : {type_soir}\nZone(s) : {zones_soir_str}")
 
 # ==========================================
-# --- ONGLET 4 : ESPACE COACH (STAFF) ---
+# --- ONGLET 3 : ESPACE COACH (STAFF) ---
 # ==========================================
 with tab_coach:
     st.markdown("### 🔐 Accès Espace Staff")
@@ -441,14 +370,66 @@ with tab_coach:
 
         # --- SOUS-ONGLET 2 : PHYSIQUE (ROMAIN) ---
         with tab_c_romain:
-            st.markdown("## 🏋️‍♂️ Journal de Préparation Physique (Consulter les saisies de Raph)")
+            st.markdown("## 🏋️‍♂️ Saisie & Suivi de la Préparation Physique")
+            
+            with st.expander("➕ Enregistrer une séance de Prépa Physique (Saisie Coach)"):
+                with st.form("form_saisie_physique"):
+                    date_seance_c = st.date_input("📅 Date de la séance", value=date.today(), key="date_sc_p")
+                    col_sc1, col_sc2 = st.columns(2)
+                    with col_sc1:
+                        contenu_general_c = st.selectbox("🎯 Thème principal :", ["Musculation Haut", "Musculation Bas", "Cardio / Aérobie", "Vitesse / Explosivité", "Prévention / Mobilité", "Récupération", "Mixte"], key="cg_p")
+                    with col_sc2:
+                        duree_finale_c = st.number_input("⏱️ Durée (minutes)", min_value=1, value=90, step=15, key="duree_p")
+                        
+                    contenu_detaille_c = st.text_area("Contenu détaillé de la séance :", height=80, key="cont_p")
+                    remarques_c = st.text_area("Remarques / Observations du coach :", height=50, key="rem_p")
+
+                    col_w1, col_w2, col_w3, col_w4 = st.columns(4)
+                    with col_w1:
+                        whoop_strain_c = st.number_input("🔥 Strain (0-21)", min_value=0.0, max_value=21.0, value=0.0, step=0.1, key="ws_p")
+                    with col_w2:
+                        whoop_cal_c = st.number_input("⚡ Énergie (kcal)", min_value=0, value=0, key="wc_p")
+                    with col_w3:
+                        whoop_hr_avg_c = st.number_input("💓 FC Moyenne", min_value=0, value=0, key="wha_p")
+                    with col_w4:
+                        whoop_hr_max_c = st.number_input("🚨 FC Max", min_value=0, value=0, key="whm_p")
+
+                    col_r1, col_r2 = st.columns(2)
+                    with col_r1:
+                        rpe_c = st.slider("🥵 Difficulté ressentie (RPE 1-10)", 1, 10, 5, key="rpe_p")
+                    with col_r2:
+                        satisfaction_c = st.slider("🎯 Satisfaction (1-5)", 1, 5, 3, key="sat_p")
+
+                    valider_seance_physique = st.form_submit_button("🔥 Enregistrer la séance de Prépa Physique", use_container_width=True)
+
+                if valider_seance_physique:
+                    charge_c = duree_finale_c * rpe_c
+                    dico_p = {
+                        'Date': str(date_seance_c), 
+                        'Type': "Prépa Physique", 
+                        'Contenu_General': contenu_general_c,
+                        'Duree': duree_finale_c, 
+                        'RPE': rpe_c, 
+                        'Charge': charge_c, 
+                        'Satisfaction': satisfaction_c,
+                        'Whoop_Strain': whoop_strain_c, 
+                        'Whoop_HR_avg': whoop_hr_avg_c, 
+                        'Whoop_HR_max': whoop_hr_max_c, 
+                        'Whoop_Calories': whoop_cal_c,
+                        'Contenu': contenu_detaille_c.strip(),
+                        'Remarques': remarques_c.strip()
+                    }
+                    ajouter_ligne("Seances", dico_p)
+                    st.success("✅ Séance de prépa physique enregistrée avec succès !")
+                    st.rerun()
+
+            st.markdown("---")
+            st.markdown("### 📋 Historique des séances de Prépa Physique")
             if not df_seances.empty:
                 df_phys = df_seances[df_seances['Type'] == 'Prépa Physique'].copy()
                 if not df_phys.empty:
                     df_phys = df_phys.sort_values(by='Date', ascending=False)
-                    cols = ['Date', 'Duree', 'RPE', 'Charge', 'Contenu_General']
-                    if 'Contenu' in df_phys.columns: cols.append('Contenu')
-                    if 'Remarques' in df_phys.columns: cols.append('Remarques')
+                    cols = ['Date', 'Duree', 'RPE', 'Charge', 'Contenu_General', 'Contenu', 'Remarques']
                     st.dataframe(df_phys[[c for c in cols if c in df_phys.columns]], use_container_width=True)
                 else:
                     st.info("Aucune séance de préparation physique enregistrée pour le moment.")
@@ -497,14 +478,67 @@ with tab_coach:
 
         # --- SOUS-ONGLET 3 : TENNIS (LUCA) ---
         with tab_c_luca:
-            st.markdown("## 🎾 Journal Entraînements & Matchs Tennis (Consulter les saisies de Raph)")
+            st.markdown("## 🎾 Saisie & Suivi des Entraînements Tennis")
+            
+            with st.expander("➕ Enregistrer une séance de Tennis / Match (Saisie Coach)"):
+                with st.form("form_saisie_tennis"):
+                    date_tennis_c = st.date_input("📅 Date de la séance", value=date.today(), key="date_sc_t")
+                    col_tc1, col_tc2 = st.columns(2)
+                    with col_tc1:
+                        type_tennis_c = st.selectbox("🎾 Type de séance :", ["Entraînement Tennis", "Match Officiel", "Match Amical"], key="tt_t")
+                        contenu_general_t = st.selectbox("🎯 Thème principal :", ["Technique", "Tactique", "Panier / Gammes", "Points dirigés", "Stratégie de Match", "Mixte"], key="cg_t")
+                    with col_tc2:
+                        duree_tennis_c = st.number_input("⏱️ Durée (minutes)", min_value=1, value=90, step=15, key="duree_t")
+                        
+                    contenu_detaille_t = st.text_area("Contenu détaillé de la séance / Match :", height=80, key="cont_t")
+                    remarques_t = st.text_area("Remarques / Bilan technique ou tactique :", height=50, key="rem_t")
+
+                    col_wt1, col_wt2, col_wt3, col_wt4 = st.columns(4)
+                    with col_wt1:
+                        whoop_strain_t = st.number_input("🔥 Strain (0-21)", min_value=0.0, max_value=21.0, value=0.0, step=0.1, key="ws_t")
+                    with col_wt2:
+                        whoop_cal_t = st.number_input("⚡ Énergie (kcal)", min_value=0, value=0, key="wc_t")
+                    with col_wt3:
+                        whoop_hr_avg_t = st.number_input("💓 FC Moyenne", min_value=0, value=0, key="wha_t")
+                    with col_wt4:
+                        whoop_hr_max_t = st.number_input("🚨 FC Max", min_value=0, value=0, key="whm_t")
+
+                    col_rt1, col_rt2 = st.columns(2)
+                    with col_rt1:
+                        rpe_t = st.slider("🥵 Difficulté ressentie (RPE 1-10)", 1, 10, 5, key="rpe_t")
+                    with col_rt2:
+                        satisfaction_t = st.slider("🎯 Satisfaction technique/tactique (1-5)", 1, 5, 3, key="sat_t")
+
+                    valider_seance_tennis = st.form_submit_button("🔥 Enregistrer la séance de Tennis", use_container_width=True)
+
+                if valider_seance_tennis:
+                    charge_t = duree_tennis_c * rpe_t
+                    dico_t = {
+                        'Date': str(date_tennis_c), 
+                        'Type': type_tennis_c, 
+                        'Contenu_General': contenu_general_t,
+                        'Duree': duree_tennis_c, 
+                        'RPE': rpe_t, 
+                        'Charge': charge_t, 
+                        'Satisfaction': satisfaction_t,
+                        'Whoop_Strain': whoop_strain_t, 
+                        'Whoop_HR_avg': whoop_hr_avg_t, 
+                        'Whoop_HR_max': whoop_hr_max_t, 
+                        'Whoop_Calories': whoop_cal_t,
+                        'Contenu': contenu_detaille_t.strip(),
+                        'Remarques': remarques_t.strip()
+                    }
+                    ajouter_ligne("Seances", dico_t)
+                    st.success("✅ Séance de tennis enregistrée avec succès !")
+                    st.rerun()
+
+            st.markdown("---")
+            st.markdown("### 📋 Historique des séances de Tennis")
             if not df_seances.empty:
                 df_tennis = df_seances[df_seances['Type'].isin(['Entraînement Tennis', 'Match Officiel', 'Match Amical'])].copy()
                 if not df_tennis.empty:
                     df_tennis = df_tennis.sort_values(by='Date', ascending=False)
-                    cols_t = ['Date', 'Type', 'Duree', 'RPE', 'Satisfaction', 'Contenu_General']
-                    if 'Contenu' in df_tennis.columns: cols_t.append('Contenu')
-                    if 'Remarques' in df_tennis.columns: cols_t.append('Remarques')
+                    cols_t = ['Date', 'Type', 'Duree', 'RPE', 'Satisfaction', 'Contenu_General', 'Contenu', 'Remarques']
                     st.dataframe(df_tennis[[c for c in cols_t if c in df_tennis.columns]], use_container_width=True)
                 else:
                     st.info("Aucune séance de tennis enregistrée pour le moment.")
@@ -606,86 +640,4 @@ with tab_coach:
 </div>"""
                 st.markdown(historique_html, unsafe_allow_html=True)
                 
-                st.markdown("### 📨 Édition de la Note de Frais par Coach")
-                choix_facture_coach = st.radio("Sélectionnez le coach pour qui générer la facture :", ["Romain", "Luca"], horizontal=True)
-                df_impayes_coach = df_frais[(df_frais['Statut'] != 'Payé') & (df_frais['Coach'] == choix_facture_coach)]
-                
-                if not df_impayes_coach.empty:
-                    total_restant_coach = df_impayes_coach['Montant_Euros'].sum()
-                    if st.button(f"📄 Générer la note de frais de {choix_facture_coach}", use_container_width=True):
-                        lignes_impayes_html = ""
-                        for idx, row in df_impayes_coach.iterrows():
-                            lignes_impayes_html += f"""<tr>
-<td style="padding: 10px; border-bottom: 1px solid #E5E7EB;">{row['Date']}</td>
-<td style="padding: 10px; border-bottom: 1px solid #E5E7EB;">{row['Depart']} ➡️ {row['Arrivee']}</td>
-<td style="padding: 10px; border-bottom: 1px solid #E5E7EB; text-align: center;">{row['Distance_km']:.1f} km</td>
-<td style="padding: 10px; border-bottom: 1px solid #E5E7EB; text-align: right;"><b>{row['Montant_Euros']:.2f} €</b></td>
-</tr>"""
-
-                        facture_parents = f"""<div style="border: 2px solid #1E3A8A; padding: 30px; border-radius: 10px; background-color: #FFFFFF; margin-top: 15px; box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);">
-<h2 style="text-align: center; color: #1E3A8A; margin-top: 0; margin-bottom: 5px;">🎾 NOTE DE FRAIS - DÉPLACEMENTS SPORTIFS</h2>
-<h4 style="text-align: center; color: #374151; margin-top: 0; font-weight: normal;">Athlète : <b>Raph</b> | Accompagnateur : <b>{choix_facture_coach}</b></h4>
-<p style="text-align: center; color: #6B7280; font-size: 14px; margin-top: 10px;">Document édité le : {date.today().strftime('%d/%m/%Y')} <br> Barème appliqué : 0,665 € / km</p>
-<hr style="border-top: 2px solid #1E3A8A; margin: 25px 0;">
-<table style="width: 100%; font-size: 15px; border-collapse: collapse; margin-bottom: 30px; color: #111827;">
-<thead>
-<tr style="background-color: #F3F4F6; text-transform: uppercase; font-size: 13px; color: #1E3A8A;">
-<th style="padding: 12px; text-align: left;">Date</th>
-<th style="padding: 12px; text-align: left;">Trajet (Aller-Retour)</th>
-<th style="padding: 12px; text-align: center;">Distance</th>
-<th style="padding: 12px; text-align: right;">Montant</th>
-</tr>
-</thead>
-<tbody>
-{lignes_impayes_html}
-</tbody>
-</table>
-<div style="background-color: #1E3A8A; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
-<span style="color: white; font-size: 16px;">Nombre de trajets : {len(df_impayes_coach)}</span>
-<h1 style="color: white; margin: 0; font-size: 28px;">NET À PAYER : {total_restant_coach:.2f} €</h1>
-</div>
-<p style="text-align: center; color: #6B7280; font-size: 13px; margin-top: 20px; font-style: italic;">Merci de procéder au règlement de cette note de frais. <br><b>{choix_facture_coach}</b></p>
-</div>"""
-                        st.markdown(facture_parents, unsafe_allow_html=True)
-                        st.balloons()
-            else:
-                st.info("Aucun frais kilométrique enregistré pour l'instant.")
-
-            st.markdown("---")
-            st.subheader("🌅 Base de données : Gestion & Suppression")
-            
-            st.markdown("**Forme (Matin)**")
-            if not df_forme.empty:
-                st.dataframe(df_forme, use_container_width=True)
-                col_f1, col_f2 = st.columns([3, 1])
-                with col_f1:
-                    index_m = st.selectbox("Ligne à supprimer (Matin) :", df_forme.index)
-                with col_f2:
-                    if st.button("🗑️ Supprimer Forme", use_container_width=True):
-                        supprimer_ligne_gsheets("Forme", index_m)
-                        st.rerun()
-
-            st.markdown("**Séances (Toutes)**")
-            if not df_seances.empty:
-                st.dataframe(df_seances, use_container_width=True)
-                col_s1, col_s2 = st.columns([3, 1])
-                with col_s1:
-                    index_s = st.selectbox("Ligne à supprimer (Séance) :", df_seances.index)
-                with col_s2:
-                    if st.button("🗑️ Supprimer Séance", use_container_width=True):
-                        supprimer_ligne_gsheets("Seances", index_s)
-                        st.rerun()
-
-            st.markdown("**Flash Soir**")
-            if not df_soir.empty:
-                st.dataframe(df_soir, use_container_width=True)
-                col_so1, col_so2 = st.columns([3, 1])
-                with col_so1:
-                    index_soir = st.selectbox("Ligne à supprimer (Soir) :", df_soir.index)
-                with col_so2:
-                    if st.button("🗑️ Supprimer Bilan Soir", use_container_width=True):
-                        supprimer_ligne_gsheets("Soir", index_soir)
-                        st.rerun()
-
-    elif saisie_mdp != "":
-        st.error("❌ Mot de passe incorrect.")
+                st.markdown("### 📨 Édition de la Note de Frais
