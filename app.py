@@ -56,7 +56,7 @@ def charger_donnees():
         return df_forme, df_seances, df_soir, df_tests, df_frais
     except Exception as e:
         df_forme = pd.DataFrame(columns=['Date', 'Sommeil', 'Fatigue', 'Stress', 'Humeur', 'Score_Forme', 'Douleur_Type', 'Zones_Douleur'])
-        df_seances = pd.DataFrame(columns=['Date', 'Type', 'Contenu_General', 'Duree', 'RPE', 'Charge', 'Satisfaction', 'Contenu', 'Remarques'])
+        df_seances = pd.DataFrame(columns=['Date', 'Type', 'Contenu_General', 'Duree', 'RPE', 'Charge', 'Satisfaction', 'Contenu', 'Remarques', 'Note_Comportement'])
         df_soir = pd.DataFrame(columns=['Date', 'Etat_Jour', 'Zones_Douleur_Soir', 'Type_Douleur'])
         df_tests = pd.DataFrame(columns=['Date', 'Periode', 'Test', 'Cote', 'Resultat', 'Unite', 'Objectif_Prochain'])
         df_frais = pd.DataFrame(columns=['Date', 'Depart', 'Arrivee', 'Distance_km', 'Montant_Euros', 'Statut', 'Coach'])
@@ -194,7 +194,7 @@ with tab_matin:
 # --- ONGLET 2 : BILAN SÉANCE (JOUEUR) ---
 # ==========================================
 with tab_seance:
-    st.info("⏱ **Rappel Joueur :** À remplir dans les 30 minutes suivant la fin de l'effort pour consigner tes métriques WHOOP et tes ressentis.")
+    st.info("⏱ **Rappel Joueur :** À remplir dans les 30 minutes suivant la fin de l'effort pour consigner tes métriques WHOOP.")
     date_seance_j = st.date_input("📅 Date de la séance", value=date.today(), key="date_sj")
     
     st.markdown("### 📡 Données WHOOP (Saisie Joueur)")
@@ -208,15 +208,8 @@ with tab_seance:
     with col_wj4:
         whoop_hr_max_j = st.number_input("🚨 FC Max (bpm)", min_value=0, value=0, key="whm_j")
 
-    st.markdown("### 🧠 Ressenti & Commentaires")
-    col_rj1, col_rj2 = st.columns(2)
-    with col_rj1:
-        rpe_j = st.slider("🥵 Difficulté ressentie (RPE 1-10)", 1, 10, 5, key="rpe_j")
-    with col_rj2:
-        satisfaction_j = st.slider("🎯 Satisfaction (1-5)", 1, 5, 3, key="sat_j")
-
-    contenu_detaille_j = st.text_area("Détail de ce que tu as réalisé :", height=80, key="cont_j", placeholder="Exercices, séries, charges...")
-    remarques_j = st.text_area("Remarques éventuelles (gêne, sensations...) :", height=50, key="rem_j", placeholder="Optionnel...")
+    st.markdown("### 🧠 Ressenti Global")
+    rpe_j = st.slider("🥵 Difficulté ressentie (RPE 1-10)", 1, 10, 5, key="rpe_j")
 
     if st.button("✅ Valider mon Bilan Séance", use_container_width=True):
         dico_j = {
@@ -226,13 +219,14 @@ with tab_seance:
             'Duree': 90,
             'RPE': rpe_j,
             'Charge': 90 * rpe_j,
-            'Satisfaction': satisfaction_j,
+            'Satisfaction': 3,
             'Whoop_Strain': whoop_strain_j,
             'Whoop_HR_avg': whoop_hr_avg_j,
             'Whoop_HR_max': whoop_hr_max_j,
             'Whoop_Calories': whoop_cal_j,
-            'Contenu': contenu_detaille_j.strip(),
-            'Remarques': remarques_j.strip()
+            'Contenu': "",
+            'Remarques': "",
+            'Note_Comportement': ""
         }
         ajouter_ligne("Seances", dico_j)
         st.success("🎯 Bilan de séance enregistré avec succès dans la base commune !")
@@ -430,12 +424,9 @@ with tab_coach:
                         
                     contenu_detaille_c = st.text_area("Contenu détaillé de la séance :", height=80, key="cont_p")
                     remarques_c = st.text_area("Remarques / Observations du coach :", height=50, key="rem_p")
+                    note_comportement_p = st.text_area("🧠 Note comportementale (attitude, investissement...) :", height=50, key="nc_p")
 
-                    col_r1, col_r2 = st.columns(2)
-                    with col_r1:
-                        rpe_c = st.slider("🥵 Difficulté (RPE 1-10)", 1, 10, 5, key="rpe_p")
-                    with col_r2:
-                        satisfaction_c = st.slider("🎯 Satisfaction (1-5)", 1, 5, 3, key="sat_p")
+                    rpe_c = st.slider("🥵 Difficulté (RPE 1-10)", 1, 10, 5, key="rpe_p")
 
                     valider_seance_physique = st.form_submit_button("🔥 Enregistrer la séance de Prépa Physique", use_container_width=True)
 
@@ -448,13 +439,14 @@ with tab_coach:
                         'Duree': duree_finale_c, 
                         'RPE': rpe_c, 
                         'Charge': charge_c, 
-                        'Satisfaction': satisfaction_c,
+                        'Satisfaction': 3,
                         'Whoop_Strain': 0.0, 
                         'Whoop_HR_avg': 0, 
                         'Whoop_HR_max': 0, 
                         'Whoop_Calories': 0,
                         'Contenu': contenu_detaille_c.strip(),
-                        'Remarques': remarques_c.strip()
+                        'Remarques': remarques_c.strip(),
+                        'Note_Comportement': note_comportement_p.strip()
                     }
                     ajouter_ligne("Seances", dico_p)
                     st.success("✅ Séance de prépa physique enregistrée avec succès !")
@@ -466,7 +458,7 @@ with tab_coach:
                 df_phys = df_seances[df_seances['Type'] == 'Prépa Physique'].copy()
                 if not df_phys.empty:
                     df_phys = df_phys.sort_values(by='Date', ascending=False)
-                    cols = ['Date', 'Duree', 'RPE', 'Charge', 'Contenu_General', 'Contenu', 'Remarques']
+                    cols = ['Date', 'Duree', 'RPE', 'Charge', 'Contenu_General', 'Contenu', 'Remarques', 'Note_Comportement']
                     st.dataframe(df_phys[[c for c in cols if c in df_phys.columns]], use_container_width=True)
                 else:
                     st.info("Aucune séance de préparation physique enregistrée pour le moment.")
@@ -529,12 +521,9 @@ with tab_coach:
                         
                     contenu_detaille_t = st.text_area("Contenu détaillé de la séance / Match :", height=80, key="cont_t")
                     remarques_t = st.text_area("Remarques / Bilan technique ou tactique :", height=50, key="rem_t")
+                    note_comportement_t = st.text_area("🧠 Note comportementale (attitude, investissement...) :", height=50, key="nc_t")
 
-                    col_rt1, col_rt2 = st.columns(2)
-                    with col_rt1:
-                        rpe_t = st.slider("🥵 Difficulté (RPE 1-10)", 1, 10, 5, key="rpe_t")
-                    with col_rt2:
-                        satisfaction_t = st.slider("🎯 Satisfaction (1-5)", 1, 5, 3, key="sat_t")
+                    rpe_t = st.slider("🥵 Difficulté (RPE 1-10)", 1, 10, 5, key="rpe_t")
 
                     valider_seance_tennis = st.form_submit_button("🔥 Enregistrer la séance de Tennis", use_container_width=True)
 
@@ -547,13 +536,14 @@ with tab_coach:
                         'Duree': duree_tennis_c, 
                         'RPE': rpe_t, 
                         'Charge': charge_t, 
-                        'Satisfaction': satisfaction_t,
+                        'Satisfaction': 3,
                         'Whoop_Strain': 0.0, 
                         'Whoop_HR_avg': 0, 
                         'Whoop_HR_max': 0, 
                         'Whoop_Calories': 0,
                         'Contenu': contenu_detaille_t.strip(),
-                        'Remarques': remarques_t.strip()
+                        'Remarques': remarques_t.strip(),
+                        'Note_Comportement': note_comportement_t.strip()
                     }
                     ajouter_ligne("Seances", dico_t)
                     st.success("✅ Séance de tennis enregistrée avec succès !")
@@ -565,7 +555,7 @@ with tab_coach:
                 df_tennis = df_seances[df_seances['Type'].isin(['Entraînement Tennis', 'Match Officiel', 'Match Amical'])].copy()
                 if not df_tennis.empty:
                     df_tennis = df_tennis.sort_values(by='Date', ascending=False)
-                    cols_t = ['Date', 'Type', 'Duree', 'RPE', 'Satisfaction', 'Contenu_General', 'Contenu', 'Remarques']
+                    cols_t = ['Date', 'Type', 'Duree', 'RPE', 'Satisfaction', 'Contenu_General', 'Contenu', 'Remarques', 'Note_Comportement']
                     st.dataframe(df_tennis[[c for c in cols_t if c in df_tennis.columns]], use_container_width=True)
                 else:
                     st.info("Aucune séance de tennis enregistrée pour le moment.")
