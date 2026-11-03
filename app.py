@@ -418,7 +418,7 @@ with tab_coach:
                     date_seance_c = st.date_input("📅 Date de la séance", value=date.today(), key="date_sc_p")
                     col_sc1, col_sc2 = st.columns(2)
                     with col_sc1:
-                        contenu_general_c = st.selectbox("🎯 Thème principal :", ["Musculation Haut", "Musculation Bas", "Cardio / Aérobie", "Vitesse / Explosivité", "Prévention / Mobilité", "Récupération", "Mixte"], key="cg_p")
+                        contenu_general_c = st.selectbox("🎯 Thème principal :", ["Musculation Haut", "Musculation Bas", "Cardio / Aérobie", "Vitesse / Explosivité", "Prévention / Mobilité", "Récupération", "Mixte", "Gainage/Abdos"], key="cg_p")
                     with col_sc2:
                         duree_finale_c = st.number_input("⏱️ Durée (minutes)", min_value=1, value=90, step=15, key="duree_p")
                         
