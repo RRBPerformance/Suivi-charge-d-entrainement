@@ -76,14 +76,24 @@ def ajouter_ligne(onglet_nom, dico_donnees):
             worksheet.append_row(list(dico_donnees.keys()))
             en_tetes = list(dico_donnees.keys())
             
-        for key in dico_donnees.keys():
-            if key not in en_tetes:
-                worksheet.update_cell(1, len(en_tetes) + 1, key)
-                en_tetes.append(key)
-                
+        # Construction de la ligne en respectant strictement l'ordre des en-têtes existants dans le Google Sheet
         row_to_append = []
         for header in en_tetes:
-            row_to_append.append(dico_donnees.get(header, ""))
+            # Recherche de la clé correspondante (gère les synonymes si les anciens noms diffèrent)
+            valeur = ""
+            if header in dico_donnees:
+                valeur = dico_donnees[header]
+            else:
+                # Correspondances de secours si l'en-tête Google Sheets diffère du dictionnaire Python
+                if onglet_nom == "Soir":
+                    if header == "Participation du jour" and "Etat_Jour" in dico_donnees:
+                        valeur = dico_donnees["Etat_Jour"]
+                    elif header == "Localisation de la gêne" and "Zones_Douleur_Soir" in dico_donnees:
+                        valeur = dico_donnees["Zones_Douleur_Soir"]
+                    elif header == "Nature de la gêne" and "Type_Douleur" in dico_donnees:
+                        valeur = dico_donnees["Type_Douleur"]
+                
+            row_to_append.append(valeur)
             
         worksheet.append_row(row_to_append)
         st.cache_data.clear()
@@ -256,9 +266,15 @@ with tab_soir:
     
     if st.button("💤 Envoyer le bilan du soir", use_container_width=True):
         zones_soir_str = ", ".join(zones_soir) if zones_soir else "Aucune"
+        # On utilise les clés exactes correspondant aux colonnes A, B, C, D de votre Google Sheets "Soir"
         dico = {
-            'Date': str(date_soir), 'Etat_Jour': etat_jour, 
-            'Zones_Douleur_Soir': zones_soir_str, 'Type_Douleur': type_soir
+            'Date': str(date_soir), 
+            'Participation du jour': etat_jour, 
+            'Localisation de la gêne': zones_soir_str, 
+            'Nature de la gêne': type_soir,
+            'Etat_Jour': etat_jour,
+            'Zones_Douleur_Soir': zones_soir_str,
+            'Type_Douleur': type_soir
         }
         ajouter_ligne("Soir", dico)
         st.success("✅ Bilan du soir enregistré dans la base de données commune !")
@@ -437,9 +453,13 @@ with tab_coach:
                 if not df_soir.empty:
                     df_s_hist = df_soir.sort_values(by='Date', ascending=False)
                     for idx, row in df_s_hist.iterrows():
-                        with st.expander(f"📅 {row['Date']} - Bilan : {row.get('Etat_Jour', 'N/C')}"):
-                            st.markdown(f"**Type de ressenti :** {row.get('Type_Douleur', 'N/C')}")
-                            st.markdown(f"**Zone(s) d'inconfort :** {row.get('Zones_Douleur_Soir', 'Aucune')}")
+                        # Récupération sécurisée peu importe le nom de la colonne dans le Sheet
+                        etat = row.get('Participation du jour', row.get('Etat_Jour', 'N/C'))
+                        nature = row.get('Nature de la gêne', row.get('Type_Douleur', 'N/C'))
+                        zone = row.get('Localisation de la gêne', row.get('Zones_Douleur_Soir', 'Aucune'))
+                        with st.expander(f"📅 {row['Date']} - Bilan : {etat}"):
+                            st.markdown(f"**Type de ressenti :** {nature}")
+                            st.markdown(f"**Zone(s) d'inconfort :** {zone}")
                 else:
                     st.info("Aucun flash du soir enregistré.")
 
@@ -765,7 +785,7 @@ with tab_coach:
                         supprimer_ligne_gsheets("Seances", index_s)
                         st.rerun()
 
-            st.markdown("**Flash Soir**")
+            st.markdown("**Flash Soir**", unsafe_allow_html=True)
             if not df_soir.empty:
                 st.dataframe(df_soir, use_container_width=True)
                 col_so1, col_so2 = st.columns([3, 1])
