@@ -76,10 +76,9 @@ def ajouter_ligne(onglet_nom, dico_donnees):
             worksheet.append_row(list(dico_donnees.keys()))
             en_tetes = list(dico_donnees.keys())
             
-        # Construction de la ligne en respectant strictement l'ordre des en-têtes existants dans le Google Sheet
+        # Construction de la ligne en respectant l'ordre exact des en-têtes du Google Sheet
         row_to_append = []
         for header in en_tetes:
-            # Recherche de la clé correspondante (gère les synonymes si les anciens noms diffèrent)
             valeur = ""
             if header in dico_donnees:
                 valeur = dico_donnees[header]
@@ -92,6 +91,9 @@ def ajouter_ligne(onglet_nom, dico_donnees):
                         valeur = dico_donnees["Zones_Douleur_Soir"]
                     elif header == "Nature de la gêne" and "Type_Douleur" in dico_donnees:
                         valeur = dico_donnees["Type_Douleur"]
+                elif onglet_nom == "Forme":
+                    if header == "Quel est le type de douleur ?" and "Douleur_Type" in dico_donnees:
+                        valeur = dico_donnees["Douleur_Type"]
                 
             row_to_append.append(valeur)
             
@@ -173,10 +175,19 @@ with tab_matin:
         score_forme = sommeil + fatigue + stress + humeur
         zones_str = ", ".join(zones_matin) if zones_matin else "Aucune"
         dico = {
-            'Date': str(date_matin), 'Sommeil': sommeil, 'Fatigue': fatigue, 
-            'Stress': stress, 'Humeur': humeur, 'Score_Forme': score_forme,
-            'Douleur_Type': type_douleur, 'Zones_Douleur': zones_str,
-            'Whoop_Score': whoop_recup, 'Whoop_VFC': whoop_vfc, 'Whoop_FC': whoop_fc
+            'Date': str(date_matin), 
+            'Sommeil': sommeil, 
+            'Fatigue': fatigue, 
+            'Stress': stress, 
+            'Humeur': humeur, 
+            'Score_Forme': score_forme,
+            'Douleur_Type': type_douleur, 
+            'Zones_Douleur': zones_str,
+            'Whoop_Score': whoop_recup, 
+            'Whoop_Sommeil': whoop_sommeil,
+            'Whoop_VFC': whoop_vfc, 
+            'Whoop_FC': whoop_fc,
+            'Quel est le type de douleur ?': type_douleur
         }
         ajouter_ligne("Forme", dico)
         st.success(f"🎉 Parfait ! Ton score de forme aujourd'hui est de {score_forme}/20. Enregistré !")
@@ -266,7 +277,6 @@ with tab_soir:
     
     if st.button("💤 Envoyer le bilan du soir", use_container_width=True):
         zones_soir_str = ", ".join(zones_soir) if zones_soir else "Aucune"
-        # On utilise les clés exactes correspondant aux colonnes A, B, C, D de votre Google Sheets "Soir"
         dico = {
             'Date': str(date_soir), 
             'Participation du jour': etat_jour, 
@@ -441,10 +451,22 @@ with tab_coach:
                 if not df_forme.empty:
                     df_f_hist = df_forme.sort_values(by='Date', ascending=False)
                     for idx, row in df_f_hist.iterrows():
-                        with st.expander(f"📅 {row['Date']} - Score Forme : {row.get('Score_Forme', 'N/C')}/20"):
-                            st.markdown(f"**Sommeil :** {row.get('Sommeil', 'N/C')} | **Fraîcheur :** {row.get('Fatigue', 'N/C')} | **Stress :** {row.get('Stress', 'N/C')} | **Humeur :** {row.get('Humeur', 'N/C')}")
-                            st.markdown(f"**Douleur / Gêne :** {row.get('Douleur_Type', 'Aucune')} ({row.get('Zones_Douleur', 'Aucune')})")
-                            st.markdown(f"**Whoop :** Récup : {row.get('Whoop_Score', 0)}% | Sommeil : {row.get('Whoop_Sommeil', 0)}% | VFC : {row.get('Whoop_VFC', 0)}ms")
+                        # Récupération sécurisée peu importe le nom de la colonne dans le Sheet
+                        sommeil_v = row.get('Sommeil', 'N/C')
+                        fatigue_v = row.get('Fatigue', 'N/C')
+                        stress_v = row.get('Stress', 'N/C')
+                        humeur_v = row.get('Humeur', 'N/C')
+                        score_v = row.get('Score_Forme', 'N/C')
+                        douleur_v = row.get('Quel est le type de douleur ?', row.get('Douleur_Type', 'Aucune'))
+                        zones_v = row.get('Fessiers', row.get('Zones_Douleur', 'Aucune'))
+                        whoop_rec_v = row.get('Whoop_Recup', row.get('Whoop_Score', 0))
+                        whoop_som_v = row.get('Whoop_Sommeil', 0)
+                        whoop_vfc_v = row.get('Whoop_VFC', 0)
+
+                        with st.expander(f"📅 {row['Date']} - Score Forme : {score_v}/20"):
+                            st.markdown(f"**Sommeil :** {sommeil_v} | **Fraîcheur :** {fatigue_v} | **Stress :** {stress_v} | **Humeur :** {humeur_v}")
+                            st.markdown(f"**Douleur / Gêne :** {douleur_v} ({zones_v})")
+                            st.markdown(f"**Whoop :** Récup : {whoop_rec_v}% | Sommeil : {whoop_som_v}% | VFC : {whoop_vfc_v}ms")
                 else:
                     st.info("Aucun check-in matinal enregistré.")
                     
@@ -453,7 +475,6 @@ with tab_coach:
                 if not df_soir.empty:
                     df_s_hist = df_soir.sort_values(by='Date', ascending=False)
                     for idx, row in df_s_hist.iterrows():
-                        # Récupération sécurisée peu importe le nom de la colonne dans le Sheet
                         etat = row.get('Participation du jour', row.get('Etat_Jour', 'N/C'))
                         nature = row.get('Nature de la gêne', row.get('Type_Douleur', 'N/C'))
                         zone = row.get('Localisation de la gêne', row.get('Zones_Douleur_Soir', 'Aucune'))
@@ -785,7 +806,7 @@ with tab_coach:
                         supprimer_ligne_gsheets("Seances", index_s)
                         st.rerun()
 
-            st.markdown("**Flash Soir**", unsafe_allow_html=True)
+            st.markdown("**Flash Soir**")
             if not df_soir.empty:
                 st.dataframe(df_soir, use_container_width=True)
                 col_so1, col_so2 = st.columns([3, 1])
