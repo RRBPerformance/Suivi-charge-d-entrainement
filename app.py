@@ -118,12 +118,16 @@ def supprimer_ligne_gsheets(onglet_nom, index_ligne):
     except Exception as e:
         st.error(f"Erreur lors de la suppression : {e}")
 
-def marquer_paye_gsheets(onglet_nom, index_ligne):
+def marquer_paye_gsheets(index_ligne):
     try:
         sh = init_connection()
-        worksheet = sh.worksheet(onglet_nom)
-        worksheet.update_cell(index_ligne + 2, 6, "Payé")
-        worksheet.update_cell(1, 6, "Statut")
+        worksheet = sh.worksheet("Frais")
+        en_tetes = worksheet.row_values(1)
+        if "Statut" in en_tetes:
+            col_idx = en_tetes.index("Statut") + 1
+        else:
+            col_idx = 6  # Colonne par défaut
+        worksheet.update_cell(index_ligne + 2, col_idx, "Payé")
         st.cache_data.clear()
     except Exception as e:
         st.error(f"Erreur lors du passage en Payé : {e}")
@@ -712,40 +716,29 @@ with tab_coach:
                     else:
                         st.error("⚠️ Veuillez remplir les lieux et indiquer une distance > 0.")
             
-            st.markdown("### 🗃️ Historique Global (Tous les coachs)")
+            st.markdown("### 🗃️ Historique Global & Validation des Paiements")
             if not df_frais.empty:
-                lignes_html = ""
                 for idx, row in df_frais.iterrows():
-                    badge_statut = "<span style='color: #10B981; font-weight: bold;'>✅ Payé</span>" if row['Statut'] == 'Payé' else "<span style='color: #EF4444; font-weight: bold;'>⏳ En attente</span>"
+                    statut_actuel = row.get('Statut', 'Non payé')
+                    badge_statut = "✅ Payé" if statut_actuel == 'Payé' else "⏳ En attente"
                     coach_nom = row.get('Coach', 'Romain')
-                    lignes_html += f"""<tr>
-<td style="padding: 10px; border-bottom: 1px solid #D1D5DB;">{row['Date']}</td>
-<td style="padding: 10px; border-bottom: 1px solid #D1D5DB;">{row['Depart']} ➡️ {row['Arrivee']}</td>
-<td style="padding: 10px; border-bottom: 1px solid #D1D5DB; text-align: center;">{row['Distance_km']:.1f} km</td>
-<td style="padding: 10px; border-bottom: 1px solid #D1D5DB; text-align: center;"><b>{coach_nom}</b></td>
-<td style="padding: 10px; border-bottom: 1px solid #D1D5DB; text-align: center;">{badge_statut}</td>
-<td style="padding: 10px; border-bottom: 1px solid #D1D5DB; text-align: right;"><b>{row['Montant_Euros']:.2f} €</b></td>
-</tr>"""
-
-                historique_html = f"""<div style="border: 1px solid #E5E7EB; padding: 15px; border-radius: 8px; background-color: #F9FAFB; margin-bottom: 15px;">
-<table style="width: 100%; font-size: 14px; border-collapse: collapse;">
-<thead>
-<tr style="background-color: #E5E7EB; text-transform: uppercase; font-size: 12px; color: #374151;">
-<th style="padding: 8px; text-align: left;">Date</th>
-<th style="padding: 8px; text-align: left;">Trajet</th>
-<th style="padding: 8px; text-align: center;">Distance</th>
-<th style="padding: 8px; text-align: center;">Coach</th>
-<th style="padding: 8px; text-align: center;">Statut</th>
-<th style="padding: 8px; text-align: right;">Montant</th>
-</tr>
-</thead>
-<tbody>
-{lignes_html}
-</tbody>
-</table>
-</div>"""
-                st.markdown(historique_html, unsafe_allow_html=True)
+                    
+                    cols_f = st.columns([2, 3, 1.5, 1.5, 1.5, 2])
+                    cols_f[0].write(str(row['Date']))
+                    cols_f[1].write(f"{row['Depart']} ➡️ {row['Arrivee']}")
+                    cols_f[2].write(f"{row['Distance_km']} km")
+                    cols_f[3].write(f"**{coach_nom}**")
+                    cols_f[4].write(f"**{row['Montant_Euros']} €**")
+                    
+                    if statut_actuel != 'Payé':
+                        if cols_f[5].button("Marquer payé", key=f"paye_{idx}"):
+                            marquer_paye_gsheets(idx)
+                            st.success("Trajet marqué comme payé !")
+                            st.rerun()
+                    else:
+                        cols_f[5].write("✅ Payé")
                 
+                st.markdown("---")
                 st.markdown("### 📨 Édition de la Note de Frais par Coach")
                 choix_facture_coach = st.radio("Sélectionnez le coach pour qui générer la facture :", ["Romain", "Luca"], horizontal=True)
                 df_impayes_coach = df_frais[(df_frais['Statut'] != 'Payé') & (df_frais['Coach'] == choix_facture_coach)]
@@ -758,8 +751,8 @@ with tab_coach:
                             lignes_impayes_html += f"""<tr>
 <td style="padding: 10px; border-bottom: 1px solid #E5E7EB;">{row['Date']}</td>
 <td style="padding: 10px; border-bottom: 1px solid #E5E7EB;">{row['Depart']} ➡️ {row['Arrivee']}</td>
-<td style="padding: 10px; border-bottom: 1px solid #E5E7EB; text-align: center;">{row['Distance_km']:.1f} km</td>
-<td style="padding: 10px; border-bottom: 1px solid #E5E7EB; text-align: right;"><b>{row['Montant_Euros']:.2f} €</b></td>
+<td style="padding: 10px; border-bottom: 1px solid #E5E7EB; text-align: center;">{row['Distance_km']} km</td>
+<td style="padding: 10px; border-bottom: 1px solid #E5E7EB; text-align: right;"><b>{row['Montant_Euros']} €</b></td>
 </tr>"""
 
                         facture_parents = f"""<div style="border: 2px solid #1E3A8A; padding: 30px; border-radius: 10px; background-color: #FFFFFF; margin-top: 15px; box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);">
