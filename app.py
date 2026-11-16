@@ -34,25 +34,34 @@ def init_connection():
 def charger_donnees():
     try:
         sh = init_connection()
-        df_forme = pd.DataFrame(sh.worksheet("Forme").get_all_records())
-        df_seances = pd.DataFrame(sh.worksheet("Seances").get_all_records())
-        df_soir = pd.DataFrame(sh.worksheet("Soir").get_all_records())
         
-        try:
-            df_tests = pd.DataFrame(sh.worksheet("Tests").get_all_records())
-        except Exception:
-            df_tests = pd.DataFrame(columns=['Date', 'Periode', 'Test', 'Cote', 'Resultat', 'Unite', 'Objectif_Prochain'])
-            
-        try:
-            df_frais = pd.DataFrame(sh.worksheet("Frais").get_all_records())
-            if not df_frais.empty:
-                if 'Statut' not in df_frais.columns:
-                    df_frais['Statut'] = "Non payé"
-                if 'Coach' not in df_frais.columns:
-                    df_frais['Coach'] = "Romain"
-        except Exception:
-            df_frais = pd.DataFrame(columns=['Date', 'Depart', 'Arrivee', 'Distance_km', 'Montant_Euros', 'Statut', 'Coach'])
-            
+        def ws_to_df(ws_name, colonnes_defaut):
+            try:
+                ws = sh.worksheet(ws_name)
+                data = ws.get_all_values()
+                if len(data) > 1:
+                    en_tetes = data[0]
+                    lignes = data[1:]
+                    df = pd.DataFrame(lignes, columns=en_tetes)
+                    df = df.loc[:, df.columns != ""]
+                    return df
+                else:
+                    return pd.DataFrame(columns=colonnes_defaut)
+            except Exception:
+                return pd.DataFrame(columns=colonnes_defaut)
+
+        df_forme = ws_to_df("Forme", ['Date', 'Sommeil', 'Fatigue', 'Stress', 'Humeur', 'Score_Forme', 'Douleur_Type', 'Zones_Douleur'])
+        df_seances = ws_to_df("Seances", ['Date', 'Type', 'Contenu_General', 'Duree', 'RPE', 'Charge', 'Satisfaction', 'Contenu', 'Remarques', 'Note_Comportement'])
+        df_soir = ws_to_df("Soir", ['Date', 'Etat_Jour', 'Zones_Douleur_Soir', 'Type_Douleur'])
+        df_tests = ws_to_df("Tests", ['Date', 'Periode', 'Test', 'Cote', 'Resultat', 'Unite', 'Objectif_Prochain'])
+        df_frais = ws_to_df("Frais", ['Date', 'Depart', 'Arrivee', 'Distance_km', 'Montant_Euros', 'Statut', 'Coach'])
+        
+        if not df_frais.empty:
+            if 'Statut' not in df_frais.columns:
+                df_frais['Statut'] = "Non payé"
+            if 'Coach' not in df_frais.columns:
+                df_frais['Coach'] = "Romain"
+                
         return df_forme, df_seances, df_soir, df_tests, df_frais
     except Exception as e:
         df_forme = pd.DataFrame(columns=['Date', 'Sommeil', 'Fatigue', 'Stress', 'Humeur', 'Score_Forme', 'Douleur_Type', 'Zones_Douleur'])
@@ -76,14 +85,12 @@ def ajouter_ligne(onglet_nom, dico_donnees):
             worksheet.append_row(list(dico_donnees.keys()))
             en_tetes = list(dico_donnees.keys())
             
-        # Construction de la ligne en respectant l'ordre exact des en-têtes du Google Sheet
         row_to_append = []
         for header in en_tetes:
             valeur = ""
             if header in dico_donnees:
                 valeur = dico_donnees[header]
             else:
-                # Correspondances de secours si l'en-tête Google Sheets diffère du dictionnaire Python
                 if onglet_nom == "Soir":
                     if header == "Participation du jour" and "Etat_Jour" in dico_donnees:
                         valeur = dico_donnees["Etat_Jour"]
@@ -94,7 +101,7 @@ def ajouter_ligne(onglet_nom, dico_donnees):
                 elif onglet_nom == "Forme":
                     if header == "Quel est le type de douleur ?" and "Douleur_Type" in dico_donnees:
                         valeur = dico_donnees["Douleur_Type"]
-                
+            
             row_to_append.append(valeur)
             
         worksheet.append_row(row_to_append)
@@ -322,6 +329,7 @@ with tab_coach:
                     df_f = df_forme.copy()
                     df_f['Date'] = pd.to_datetime(df_f['Date'])
                     df_f = df_f.sort_values('Date')
+                    df_f['Score_Forme'] = pd.to_numeric(df_f['Score_Forme'], errors='coerce')
                     df_f['Moy_7j'] = df_f['Score_Forme'].rolling(window=7, min_periods=3).mean()
                     df_f['Std_7j'] = df_f['Score_Forme'].rolling(window=7, min_periods=3).std()
                     dernier_score = df_f['Score_Forme'].iloc[-1]
@@ -348,6 +356,7 @@ with tab_coach:
                 if not df_seances.empty and len(df_seances) >= 3:
                     df_s = df_seances.copy()
                     df_s['Date'] = pd.to_datetime(df_s['Date'])
+                    df_s['Charge'] = pd.to_numeric(df_s['Charge'], errors='coerce')
                     df_jour = df_s.groupby('Date')['Charge'].sum().reset_index().set_index('Date').sort_index()
                     
                     idx_alerte = pd.date_range(start=df_jour.index.min(), end=pd.to_datetime(date.today()))
@@ -384,6 +393,7 @@ with tab_coach:
                 if not df_forme.empty and 'Score_Forme' in df_forme.columns:
                     df_f_chart = df_forme.copy()
                     df_f_chart['Date'] = pd.to_datetime(df_f_chart['Date'])
+                    df_f_chart['Score_Forme'] = pd.to_numeric(df_f_chart['Score_Forme'], errors='coerce')
                     df_f_chart = df_f_chart.set_index('Date')[['Score_Forme']]
                     df_f_chart.index = df_f_chart.index.strftime('%Y-%m-%d')
                     st.line_chart(df_f_chart)
@@ -395,6 +405,7 @@ with tab_coach:
                     vue_charge = st.radio("Affichage :", ["Séances (Empilé)", "Somme cumulative"], horizontal=True)
                     df_s = df_seances.copy()
                     df_s['Date'] = pd.to_datetime(df_s['Date'])
+                    df_s['Charge'] = pd.to_numeric(df_s['Charge'], errors='coerce')
                     if vue_charge == "Séances (Empilé)":
                         df_pivot = df_s.pivot_table(index='Date', columns='Type', values='Charge', aggfunc='sum').fillna(0)
                         idx_pivot = pd.date_range(start=df_pivot.index.min(), end=pd.to_datetime(date.today()))
@@ -451,7 +462,6 @@ with tab_coach:
                 if not df_forme.empty:
                     df_f_hist = df_forme.sort_values(by='Date', ascending=False)
                     for idx, row in df_f_hist.iterrows():
-                        # Récupération sécurisée peu importe le nom de la colonne dans le Sheet
                         sommeil_v = row.get('Sommeil', 'N/C')
                         fatigue_v = row.get('Fatigue', 'N/C')
                         stress_v = row.get('Stress', 'N/C')
