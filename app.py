@@ -34,7 +34,7 @@ def init_connection():
 def charger_donnees():
     try:
         sh = init_connection()
-        
+
         def ws_to_df(ws_name, colonnes_defaut):
             try:
                 ws = sh.worksheet(ws_name)
@@ -42,29 +42,45 @@ def charger_donnees():
                 if len(data) > 1:
                     en_tetes = data[0]
                     lignes = data[1:]
-                    df = pd.DataFrame(lignes, columns=en_tetes)
-                    df = df.loc[:, df.columns != ""]
+                    # Normalise la longueur de chaque ligne par rapport aux en-têtes
+                    nb_cols = len(en_tetes)
+                    lignes_norm = [
+                        (l + [""] * (nb_cols - len(l)))[:nb_cols]
+                        for l in lignes
+                    ]
+                    df = pd.DataFrame(lignes_norm, columns=en_tetes)
+                    # Garde les colonnes non vides ou nommées
+                    cols_a_garder = [c if c.strip() != "" else f"Col_{i}" for i, c in enumerate(en_tetes)]
+                    df.columns = cols_a_garder
                     return df
                 else:
                     return pd.DataFrame(columns=colonnes_defaut)
             except Exception:
                 return pd.DataFrame(columns=colonnes_defaut)
 
-        df_forme = ws_to_df("Forme", ['Date', 'Sommeil', 'Fatigue', 'Stress', 'Humeur', 'Score_Forme', 'Douleur_Type', 'Zones_Douleur'])
+        df_forme = ws_to_df("Forme", [
+            'Date', 'Qualité du sommeil', 'Niveau de fraicheur', 'Niveau de stress',
+            'Humeur', 'Score_Forme', 'Où', 'Quel est le type de douleur ?',
+            'Whoop_Recup', 'Whoop_Sommeil', 'Whoop_VFC'
+        ])
         df_seances = ws_to_df("Seances", ['Date', 'Type', 'Contenu_General', 'Duree', 'RPE', 'Charge', 'Satisfaction', 'Contenu', 'Remarques', 'Note_Comportement'])
         df_soir = ws_to_df("Soir", ['Date', 'Etat_Jour', 'Zones_Douleur_Soir', 'Type_Douleur'])
         df_tests = ws_to_df("Tests", ['Date', 'Periode', 'Test', 'Cote', 'Resultat', 'Unite', 'Objectif_Prochain'])
         df_frais = ws_to_df("Frais", ['Date', 'Depart', 'Arrivee', 'Distance_km', 'Montant_Euros', 'Statut', 'Coach'])
-        
+
         if not df_frais.empty:
             if 'Statut' not in df_frais.columns:
                 df_frais['Statut'] = "Non payé"
             if 'Coach' not in df_frais.columns:
                 df_frais['Coach'] = "Romain"
-                
+
         return df_forme, df_seances, df_soir, df_tests, df_frais
     except Exception as e:
-        df_forme = pd.DataFrame(columns=['Date', 'Sommeil', 'Fatigue', 'Stress', 'Humeur', 'Score_Forme', 'Douleur_Type', 'Zones_Douleur'])
+        df_forme = pd.DataFrame(columns=[
+            'Date', 'Qualité du sommeil', 'Niveau de fraicheur', 'Niveau de stress',
+            'Humeur', 'Score_Forme', 'Où', 'Quel est le type de douleur ?',
+            'Whoop_Recup', 'Whoop_Sommeil', 'Whoop_VFC'
+        ])
         df_seances = pd.DataFrame(columns=['Date', 'Type', 'Contenu_General', 'Duree', 'RPE', 'Charge', 'Satisfaction', 'Contenu', 'Remarques', 'Note_Comportement'])
         df_soir = pd.DataFrame(columns=['Date', 'Etat_Jour', 'Zones_Douleur_Soir', 'Type_Douleur'])
         df_tests = pd.DataFrame(columns=['Date', 'Periode', 'Test', 'Cote', 'Resultat', 'Unite', 'Objectif_Prochain'])
@@ -78,33 +94,55 @@ def ajouter_ligne(onglet_nom, dico_donnees):
             worksheet = sh.worksheet(onglet_nom)
         except Exception:
             worksheet = sh.add_worksheet(title=onglet_nom, rows="100", cols="20")
-            
+
         en_tetes = worksheet.row_values(1)
-        
+
         if len(en_tetes) == 0:
             worksheet.append_row(list(dico_donnees.keys()))
             en_tetes = list(dico_donnees.keys())
-            
+
         row_to_append = []
         for header in en_tetes:
+            h_clean = header.strip()
             valeur = ""
-            if header in dico_donnees:
+            if h_clean in dico_donnees:
+                valeur = dico_donnees[h_clean]
+            elif header in dico_donnees:
                 valeur = dico_donnees[header]
             else:
-                if onglet_nom == "Soir":
-                    if header == "Participation du jour" and "Etat_Jour" in dico_donnees:
+                if onglet_nom == "Forme":
+                    alias_forme = {
+                        "Qualité du sommeil": "Sommeil",
+                        "Sommeil": "Qualité du sommeil",
+                        "Niveau de fraicheur": "Fatigue",
+                        "Fatigue": "Niveau de fraicheur",
+                        "Niveau de stress": "Stress",
+                        "Stress": "Niveau de stress",
+                        "Humeur": "Humeur",
+                        "Score_Forme": "Score_Forme",
+                        "Où": "Zones_Douleur",
+                        "Zones_Douleur": "Où",
+                        "Quel est le type de douleur ?": "Douleur_Type",
+                        "Douleur_Type": "Quel est le type de douleur ?",
+                        "Whoop_Recup": "Whoop_Score",
+                        "Whoop_Score": "Whoop_Recup",
+                        "Whoop_Sommeil": "Whoop_Sommeil",
+                        "Whoop_VFC": "Whoop_VFC",
+                    }
+                    cle_alt = alias_forme.get(h_clean)
+                    if cle_alt and cle_alt in dico_donnees:
+                        valeur = dico_donnees[cle_alt]
+                elif onglet_nom == "Soir":
+                    if h_clean == "Participation du jour" and "Etat_Jour" in dico_donnees:
                         valeur = dico_donnees["Etat_Jour"]
-                    elif header == "Localisation de la gêne" and "Zones_Douleur_Soir" in dico_donnees:
+                    elif h_clean == "Localisation de la gêne" and "Zones_Douleur_Soir" in dico_donnees:
                         valeur = dico_donnees["Zones_Douleur_Soir"]
-                    elif header == "Nature de la gêne" and "Type_Douleur" in dico_donnees:
+                    elif h_clean == "Nature de la gêne" and "Type_Douleur" in dico_donnees:
                         valeur = dico_donnees["Type_Douleur"]
-                elif onglet_nom == "Forme":
-                    if header == "Quel est le type de douleur ?" and "Douleur_Type" in dico_donnees:
-                        valeur = dico_donnees["Douleur_Type"]
-            
+
             row_to_append.append(valeur)
-            
-        worksheet.append_row(row_to_append)
+
+        worksheet.append_row(row_to_append, table_range="A1")
         st.cache_data.clear()
     except Exception as e:
         st.error(f"Erreur d'enregistrement Google Sheets : {e}")
@@ -126,7 +164,8 @@ def marquer_paye_gsheets(index_ligne):
         if "Statut" in en_tetes:
             col_idx = en_tetes.index("Statut") + 1
         else:
-            col_idx = 6  # Colonne par défaut
+            col_idx = 6
+            worksheet.update_cell(1, col_idx, "Statut")
         worksheet.update_cell(index_ligne + 2, col_idx, "Payé")
         st.cache_data.clear()
     except Exception as e:
@@ -141,9 +180,9 @@ df_forme, df_seances, df_soir, df_tests, df_frais = charger_donnees()
 tab_matin, tab_seance, tab_soir, tab_coach = st.tabs(["🌅 Check-in Matin", "👟 Bilan Séance", "🌙 Flash Soir", "🔐 Espace Coach"])
 
 ZONES_ANATOMIQUES = [
-    "Tête / Mâchoire", "Cervicales / Cou", "Trapèzes", "Épaules", "Biceps", "Triceps", "Coudes", 
-    "Avant-bras / Poignets / Mains", "Pectoraux", "Dorsaux / Grand dorsal", "Lombaires / Bas du dos", 
-    "Abdominaux / Obliques", "Psoas / Ilio-psoas", "Hanches / Adducteurs", "Fessiers", "Quadriceps", 
+    "Tête / Mâchoire", "Cervicales / Cou", "Trapèzes", "Épaules", "Biceps", "Triceps", "Coudes",
+    "Avant-bras / Poignets / Mains", "Pectoraux", "Dorsaux / Grand dorsal", "Lombaires / Bas du dos",
+    "Abdominaux / Obliques", "Psoas / Ilio-psoas", "Hanches / Adducteurs", "Fessiers", "Quadriceps",
     "Ischio-jambiers", "Genoux / Rotule", "Mollets (Gros Jumeaux / Soléaire)", "Tendons d'Achille", "Chevilles / Pieds"
 ]
 
@@ -152,7 +191,7 @@ ZONES_ANATOMIQUES = [
 # ==========================================
 with tab_matin:
     st.info("💡 **Consigne Joueur :** À remplir chaque matin au réveil pour adapter la charge de la journée.")
-    
+
     st.markdown("### 📡 1. Données WHOOP (Saisie Manuelle)")
     st.caption("Recopie les informations affichées sur l'application WHOOP de ton téléphone (laisse à 0 si pas de montre).")
     col_w1, col_w2 = st.columns(2)
@@ -162,7 +201,7 @@ with tab_matin:
     with col_w2:
         whoop_vfc = st.number_input("💓 VFC (Variabilité en ms)", min_value=0, value=0)
         whoop_fc = st.number_input("🫀 FC Repos (bpm)", min_value=0, value=0)
-        
+
     st.markdown("---")
     st.markdown("### 🧠 2. Ton Ressenti (Subjectif)")
     date_matin = st.date_input("📅 Date du jour", value=date.today(), key="date_m")
@@ -173,41 +212,48 @@ with tab_matin:
     with col2:
         stress = st.slider("🌪️ Niveau de stress (1=Très stressé, 5=Zen)", 1, 5, 3)
         humeur = st.slider("😊 Humeur (1=Mauvaise, 5=Excellente)", 1, 5, 3)
-        
+
     st.markdown("### 🩺 Point Clinique Matinal")
     zones_matin = st.multiselect("📍 Localisation(s) de la douleur ou gêne :", ZONES_ANATOMIQUES, key="zones_m")
     type_douleur = st.selectbox("⚡ Quel est le type de douleur ?", [
-        "Aucune", "Musculaire (déchirure, élongation)", "Articulaire (blocage, instabilité)", 
-        "Tendineuse (progressive à l'effort)", "Osseuse (profonde)", "Ligamentaire (torsion)", 
+        "Aucune", "Musculaire (déchirure, élongation)", "Articulaire (blocage, instabilité)",
+        "Tendineuse (progressive à l'effort)", "Osseuse (profonde)", "Ligamentaire (torsion)",
         "Neurologique (fourmillements)", "Courbatures (diffuses)", "Maladie (grippe, gastro...)", "Crampes"
     ], key="type_m")
-    
+
     if st.button("✅ Valider le Check-in Matin", use_container_width=True):
         score_forme = sommeil + fatigue + stress + humeur
         zones_str = ", ".join(zones_matin) if zones_matin else "Aucune"
         dico = {
-            'Date': str(date_matin), 
-            'Sommeil': sommeil, 
-            'Fatigue': fatigue, 
-            'Stress': stress, 
-            'Humeur': humeur, 
+            'Date': str(date_matin),
+            'Qualité du sommeil': sommeil,
+            'Niveau de fraicheur': fatigue,
+            'Niveau de stress': stress,
+            'Humeur': humeur,
             'Score_Forme': score_forme,
-            'Douleur_Type': type_douleur, 
-            'Zones_Douleur': zones_str,
-            'Whoop_Score': whoop_recup, 
+            'Où': zones_str,
+            'Quel est le type de douleur ?': type_douleur,
+            'Whoop_Recup': whoop_recup,
             'Whoop_Sommeil': whoop_sommeil,
-            'Whoop_VFC': whoop_vfc, 
+            'Whoop_VFC': whoop_vfc,
+            # Alias conservés au cas où
+            'Sommeil': sommeil,
+            'Fatigue': fatigue,
+            'Stress': stress,
+            'Douleur_Type': type_douleur,
+            'Zones_Douleur': zones_str,
+            'Whoop_Score': whoop_recup,
             'Whoop_FC': whoop_fc,
-            'Quel est le type de douleur ?': type_douleur
         }
         ajouter_ligne("Forme", dico)
         st.success(f"🎉 Parfait ! Ton score de forme aujourd'hui est de {score_forme}/20. Enregistré !")
-        
+
         df_f_alerte = pd.concat([df_forme, pd.DataFrame([dico])], ignore_index=True)
-        df_f_alerte['Score_Forme'] = pd.to_numeric(df_f_alerte['Score_Forme'])
+        df_f_alerte['Score_Forme'] = pd.to_numeric(df_f_alerte['Score_Forme'], errors='coerce')
+        df_f_alerte = df_f_alerte.dropna(subset=['Score_Forme'])
         if len(df_f_alerte) >= 3:
-            df_f_alerte['Date'] = pd.to_datetime(df_f_alerte['Date'])
-            df_f_alerte = df_f_alerte.sort_values('Date')
+            df_f_alerte['Date'] = pd.to_datetime(df_f_alerte['Date'], errors='coerce')
+            df_f_alerte = df_f_alerte.dropna(subset=['Date']).sort_values('Date')
             df_f_alerte['Moy_7j'] = df_f_alerte['Score_Forme'].rolling(window=7, min_periods=3).mean()
             df_f_alerte['Std_7j'] = df_f_alerte['Score_Forme'].rolling(window=7, min_periods=3).std()
             moyenne_f = df_f_alerte['Moy_7j'].iloc[-1]
@@ -228,7 +274,7 @@ with tab_matin:
 with tab_seance:
     st.info("⏱ **Rappel Joueur :** À remplir dans les 30 minutes suivant la fin de l'effort pour consigner tes métriques WHOOP.")
     date_seance_j = st.date_input("📅 Date de la séance", value=date.today(), key="date_sj")
-    
+
     type_seance_j = st.selectbox("🎯 Type de séance :", ["Prépa Physique", "Entraînement Tennis", "Match Officiel", "Match Amical"], key="ts_j")
 
     st.markdown("### 📡 Données WHOOP (Saisie Joueur)")
@@ -285,13 +331,13 @@ with tab_soir:
     type_soir = st.selectbox("⚡ Nature principale du ressenti :", [
         "RAS / Normal", "Musculaire", "Articulaire", "Tendineuse", "Osseuse / Ligamentaire", "Autre"
     ], key="type_s")
-    
+
     if st.button("💤 Envoyer le bilan du soir", use_container_width=True):
         zones_soir_str = ", ".join(zones_soir) if zones_soir else "Aucune"
         dico = {
-            'Date': str(date_soir), 
-            'Participation du jour': etat_jour, 
-            'Localisation de la gêne': zones_soir_str, 
+            'Date': str(date_soir),
+            'Participation du jour': etat_jour,
+            'Localisation de la gêne': zones_soir_str,
             'Nature de la gêne': type_soir,
             'Etat_Jour': etat_jour,
             'Zones_Douleur_Soir': zones_soir_str,
@@ -299,7 +345,7 @@ with tab_soir:
         }
         ajouter_ligne("Soir", dico)
         st.success("✅ Bilan du soir enregistré dans la base de données commune !")
-        
+
         if "3" in etat_jour or "4" in etat_jour or type_soir not in ["RAS / Normal", "Musculaire"]:
             envoyer_telegram(f"🚨 ALERTE MÉDICALE SOIR - Raph 🎾\nBilan : {etat_jour}\nDouleur : {type_soir}\nZone(s) : {zones_soir_str}")
 
@@ -309,83 +355,90 @@ with tab_soir:
 with tab_coach:
     st.markdown("### 🔐 Accès Espace Staff")
     saisie_mdp = st.text_input("Entrez le mot de passe administrateur :", type="password")
-    
+
     if saisie_mdp == MOT_DE_PASSE_COACH:
         st.success("🔓 Accès autorisé.")
-        
+
         df_forme, df_seances, df_soir, df_tests, df_frais = charger_donnees()
-        
+
         tab_c_dash, tab_c_romain, tab_c_luca, tab_c_admin = st.tabs([
-            "📊 Alertes & Dashboards", 
-            "🏋️‍♂️ Pôle Physique (Romain)", 
-            "🎾 Pôle Tennis (Luca)", 
+            "📊 Alertes & Dashboards",
+            "🏋️‍♂️ Pôle Physique (Romain)",
+            "🎾 Pôle Tennis (Luca)",
             "🚗 Frais & Administration"
         ])
-        
+
         # --- SOUS-ONGLET 1 : DASHBOARDS & ALERTES ---
         with tab_c_dash:
             st.markdown("## 🚨 Tableau de Bord des Alertes")
             col_alerte1, col_alerte2 = st.columns(2)
-            
+
             with col_alerte1:
                 st.markdown("#### 🧠 Alerte État de Forme")
                 if not df_forme.empty and len(df_forme) >= 3:
                     df_f = df_forme.copy()
-                    df_f['Date'] = pd.to_datetime(df_f['Date'])
-                    df_f = df_f.sort_values('Date')
+                    df_f['Date'] = pd.to_datetime(df_f['Date'], errors='coerce')
                     df_f['Score_Forme'] = pd.to_numeric(df_f['Score_Forme'], errors='coerce')
-                    df_f['Moy_7j'] = df_f['Score_Forme'].rolling(window=7, min_periods=3).mean()
-                    df_f['Std_7j'] = df_f['Score_Forme'].rolling(window=7, min_periods=3).std()
-                    dernier_score = df_f['Score_Forme'].iloc[-1]
-                    moyenne_f = df_f['Moy_7j'].iloc[-1]
-                    ecart_type_f = df_f['Std_7j'].iloc[-1]
-                    
-                    if pd.notna(ecart_type_f) and ecart_type_f > 0:
-                        z_score_f = (dernier_score - moyenne_f) / ecart_type_f
-                        if z_score_f <= -2:
-                            st.error(f"🔴 **ALERTE ROUGE** : Score bas ({dernier_score}/20).")
-                        elif z_score_f <= -1:
-                            st.warning(f"🟠 **ALERTE ORANGE** : Baisse de forme ({dernier_score}/20).")
-                        elif z_score_f >= 1:
-                            st.success(f"🟢 **EXCELLENT** : Forme optimale ({dernier_score}/20).")
+                    df_f = df_f.dropna(subset=['Date', 'Score_Forme']).sort_values('Date')
+                    if len(df_f) >= 3:
+                        df_f['Moy_7j'] = df_f['Score_Forme'].rolling(window=7, min_periods=3).mean()
+                        df_f['Std_7j'] = df_f['Score_Forme'].rolling(window=7, min_periods=3).std()
+                        dernier_score = df_f['Score_Forme'].iloc[-1]
+                        moyenne_f = df_f['Moy_7j'].iloc[-1]
+                        ecart_type_f = df_f['Std_7j'].iloc[-1]
+
+                        if pd.notna(ecart_type_f) and ecart_type_f > 0:
+                            z_score_f = (dernier_score - moyenne_f) / ecart_type_f
+                            if z_score_f <= -2:
+                                st.error(f"🔴 **ALERTE ROUGE** : Score bas ({dernier_score:.0f}/20).")
+                            elif z_score_f <= -1:
+                                st.warning(f"🟠 **ALERTE ORANGE** : Baisse de forme ({dernier_score:.0f}/20).")
+                            elif z_score_f >= 1:
+                                st.success(f"🟢 **EXCELLENT** : Forme optimale ({dernier_score:.0f}/20).")
+                            else:
+                                st.info(f"✅ Forme stable et dans la norme (Moyenne : {moyenne_f:.1f}).")
                         else:
-                            st.info(f"✅ Forme stable et dans la norme (Moyenne : {moyenne_f:.1f}).")
+                            st.info("Calcul en cours...")
                     else:
-                        st.info("Calcul en cours...")
+                        st.info("Pas assez de données valides pour l'analyse.")
                 else:
                     st.info("Pas assez de données pour l'analyse.")
-                    
+
             with col_alerte2:
                 st.markdown("#### ⚡ Charge sRPE")
                 if not df_seances.empty and len(df_seances) >= 3:
                     df_s = df_seances.copy()
-                    df_s['Date'] = pd.to_datetime(df_s['Date'])
+                    df_s['Date'] = pd.to_datetime(df_s['Date'], errors='coerce')
                     df_s['Charge'] = pd.to_numeric(df_s['Charge'], errors='coerce')
-                    df_jour = df_s.groupby('Date')['Charge'].sum().reset_index().set_index('Date').sort_index()
-                    
-                    idx_alerte = pd.date_range(start=df_jour.index.min(), end=pd.to_datetime(date.today()))
-                    df_jour = df_jour.reindex(idx_alerte, fill_value=0)
-                    
-                    df_jour['Moy_21j'] = df_jour['Charge'].rolling(window=21, min_periods=3).mean()
-                    df_jour['Std_21j'] = df_jour['Charge'].rolling(window=21, min_periods=3).std()
-                    derniere_charge = df_jour['Charge'].iloc[-1]
-                    moyenne_c = df_jour['Moy_21j'].iloc[-1]
-                    ecart_type_c = df_jour['Std_21j'].iloc[-1]
-                    
-                    if pd.notna(ecart_type_c) and ecart_type_c > 0:
-                        z_score_c = (derniere_charge - moyenne_c) / ecart_type_c
-                        if z_score_c >= 2:
-                            st.error(f"🔴 **ALERTE ROUGE (Surcharge)** : Pic critique ({derniere_charge:.0f} u) !")
-                        elif z_score_c >= 1:
-                            st.warning(f"🟠 **ALERTE ORANGE (Surcharge)** : Charge élevée ({derniere_charge:.0f} u).")
-                        elif z_score_c <= -2:
-                            st.error(f"🔴 **ALERTE ROUGE (Sous-charge)** : Baisse critique de charge ({derniere_charge:.0f} u).")
-                        elif z_score_c <= -1:
-                            st.warning(f"🟠 **ALERTE ORANGE (Sous-charge)** : Charge très faible ({derniere_charge:.0f} u).")
+                    df_s = df_s.dropna(subset=['Date', 'Charge'])
+                    if not df_s.empty:
+                        df_jour = df_s.groupby('Date')['Charge'].sum().reset_index().set_index('Date').sort_index()
+
+                        idx_alerte = pd.date_range(start=df_jour.index.min(), end=pd.to_datetime(date.today()))
+                        df_jour = df_jour.reindex(idx_alerte, fill_value=0)
+
+                        df_jour['Moy_21j'] = df_jour['Charge'].rolling(window=21, min_periods=3).mean()
+                        df_jour['Std_21j'] = df_jour['Charge'].rolling(window=21, min_periods=3).std()
+                        derniere_charge = df_jour['Charge'].iloc[-1]
+                        moyenne_c = df_jour['Moy_21j'].iloc[-1]
+                        ecart_type_c = df_jour['Std_21j'].iloc[-1]
+
+                        if pd.notna(ecart_type_c) and ecart_type_c > 0:
+                            z_score_c = (derniere_charge - moyenne_c) / ecart_type_c
+                            if z_score_c >= 2:
+                                st.error(f"🔴 **ALERTE ROUGE (Surcharge)** : Pic critique ({derniere_charge:.0f} u) !")
+                            elif z_score_c >= 1:
+                                st.warning(f"🟠 **ALERTE ORANGE (Surcharge)** : Charge élevée ({derniere_charge:.0f} u).")
+                            elif z_score_c <= -2:
+                                st.error(f"🔴 **ALERTE ROUGE (Sous-charge)** : Baisse critique de charge ({derniere_charge:.0f} u).")
+                            elif z_score_c <= -1:
+                                st.warning(f"🟠 **ALERTE ORANGE (Sous-charge)** : Charge très faible ({derniere_charge:.0f} u).")
+                            else:
+                                st.info("✅ Charge quotidienne dans les standards habituels.")
                         else:
-                            st.info(f"✅ Charge quotidienne dans les standards habituels.")
+                            st.info("Calcul en cours...")
                     else:
-                        st.info("Calcul en cours...")
+                        st.info("Pas assez de données valides pour l'analyse.")
                 else:
                     st.info("Pas assez de données pour l'analyse.")
 
@@ -396,9 +449,9 @@ with tab_coach:
                 st.subheader("📉 Évolution du Score de Forme")
                 if not df_forme.empty and 'Score_Forme' in df_forme.columns:
                     df_f_chart = df_forme.copy()
-                    df_f_chart['Date'] = pd.to_datetime(df_f_chart['Date'])
+                    df_f_chart['Date'] = pd.to_datetime(df_f_chart['Date'], errors='coerce')
                     df_f_chart['Score_Forme'] = pd.to_numeric(df_f_chart['Score_Forme'], errors='coerce')
-                    df_f_chart = df_f_chart.set_index('Date')[['Score_Forme']]
+                    df_f_chart = df_f_chart.dropna(subset=['Date', 'Score_Forme']).set_index('Date')[['Score_Forme']]
                     df_f_chart.index = df_f_chart.index.strftime('%Y-%m-%d')
                     st.line_chart(df_f_chart)
                 else:
@@ -408,21 +461,25 @@ with tab_coach:
                 if not df_seances.empty and 'Charge' in df_seances.columns:
                     vue_charge = st.radio("Affichage :", ["Séances (Empilé)", "Somme cumulative"], horizontal=True)
                     df_s = df_seances.copy()
-                    df_s['Date'] = pd.to_datetime(df_s['Date'])
+                    df_s['Date'] = pd.to_datetime(df_s['Date'], errors='coerce')
                     df_s['Charge'] = pd.to_numeric(df_s['Charge'], errors='coerce')
-                    if vue_charge == "Séances (Empilé)":
-                        df_pivot = df_s.pivot_table(index='Date', columns='Type', values='Charge', aggfunc='sum').fillna(0)
-                        idx_pivot = pd.date_range(start=df_pivot.index.min(), end=pd.to_datetime(date.today()))
-                        df_pivot = df_pivot.reindex(idx_pivot, fill_value=0)
-                        df_pivot.index = df_pivot.index.strftime('%Y-%m-%d')
-                        st.bar_chart(df_pivot)
+                    df_s = df_s.dropna(subset=['Date', 'Charge'])
+                    if not df_s.empty:
+                        if vue_charge == "Séances (Empilé)":
+                            df_pivot = df_s.pivot_table(index='Date', columns='Type', values='Charge', aggfunc='sum').fillna(0)
+                            idx_pivot = pd.date_range(start=df_pivot.index.min(), end=pd.to_datetime(date.today()))
+                            df_pivot = df_pivot.reindex(idx_pivot, fill_value=0)
+                            df_pivot.index = df_pivot.index.strftime('%Y-%m-%d')
+                            st.bar_chart(df_pivot)
+                        else:
+                            df_jour = df_s.groupby('Date')['Charge'].sum().reset_index().set_index('Date').sort_index()
+                            idx_jour = pd.date_range(start=df_jour.index.min(), end=pd.to_datetime(date.today()))
+                            df_jour = df_jour.reindex(idx_jour, fill_value=0)
+                            df_glissant = df_jour.rolling(window='7D', min_periods=1).sum()
+                            df_glissant.index = df_glissant.index.strftime('%Y-%m-%d')
+                            st.line_chart(df_glissant)
                     else:
-                        df_jour = df_s.groupby('Date')['Charge'].sum().reset_index().set_index('Date').sort_index()
-                        idx_jour = pd.date_range(start=df_jour.index.min(), end=pd.to_datetime(date.today()))
-                        df_jour = df_jour.reindex(idx_jour, fill_value=0)
-                        df_glissant = df_jour.rolling(window='7D', min_periods=1).sum()
-                        df_glissant.index = df_glissant.index.strftime('%Y-%m-%d')
-                        st.line_chart(df_glissant)
+                        st.info("Pas assez de données.")
                 else:
                     st.info("Pas assez de données.")
 
@@ -431,8 +488,8 @@ with tab_coach:
             if not df_seances.empty and 'Whoop_Strain' in df_seances.columns:
                 df_plot = df_seances[pd.to_numeric(df_seances['Whoop_Strain'], errors='coerce') > 0].copy()
                 if not df_plot.empty:
-                    df_plot['RPE'] = pd.to_numeric(df_plot['RPE'])
-                    df_plot['Whoop_Strain'] = pd.to_numeric(df_plot['Whoop_Strain'])
+                    df_plot['RPE'] = pd.to_numeric(df_plot['RPE'], errors='coerce')
+                    df_plot['Whoop_Strain'] = pd.to_numeric(df_plot['Whoop_Strain'], errors='coerce')
                     df_plot['Strain (sur 10)'] = (df_plot['Whoop_Strain'] / 21) * 10
                     df_graph = df_plot.set_index('Date').sort_index()
                     st.markdown("#### 📈 Évolution de la difficulté (RPE vs Strain)")
@@ -460,19 +517,19 @@ with tab_coach:
             st.markdown("---")
             st.markdown("## 📋 Historique des Check-ins Joueur (Matin & Soir)")
             col_hist1, col_hist2 = st.columns(2)
-            
+
             with col_hist1:
                 st.subheader("🌅 Historique - Check-in Matin")
                 if not df_forme.empty:
                     df_f_hist = df_forme.sort_values(by='Date', ascending=False)
                     for idx, row in df_f_hist.iterrows():
-                        sommeil_v = row.get('Sommeil', 'N/C')
-                        fatigue_v = row.get('Fatigue', 'N/C')
-                        stress_v = row.get('Stress', 'N/C')
+                        sommeil_v = row.get('Qualité du sommeil', row.get('Sommeil', 'N/C'))
+                        fatigue_v = row.get('Niveau de fraicheur', row.get('Fatigue', 'N/C'))
+                        stress_v = row.get('Niveau de stress', row.get('Stress', 'N/C'))
                         humeur_v = row.get('Humeur', 'N/C')
                         score_v = row.get('Score_Forme', 'N/C')
                         douleur_v = row.get('Quel est le type de douleur ?', row.get('Douleur_Type', 'Aucune'))
-                        zones_v = row.get('Fessiers', row.get('Zones_Douleur', 'Aucune'))
+                        zones_v = row.get('Où', row.get('Zones_Douleur', 'Aucune'))
                         whoop_rec_v = row.get('Whoop_Recup', row.get('Whoop_Score', 0))
                         whoop_som_v = row.get('Whoop_Sommeil', 0)
                         whoop_vfc_v = row.get('Whoop_VFC', 0)
@@ -483,7 +540,7 @@ with tab_coach:
                             st.markdown(f"**Whoop :** Récup : {whoop_rec_v}% | Sommeil : {whoop_som_v}% | VFC : {whoop_vfc_v}ms")
                 else:
                     st.info("Aucun check-in matinal enregistré.")
-                    
+
             with col_hist2:
                 st.subheader("🌙 Historique - Flash Soir")
                 if not df_soir.empty:
@@ -501,7 +558,7 @@ with tab_coach:
         # --- SOUS-ONGLET 2 : PHYSIQUE (ROMAIN) ---
         with tab_c_romain:
             st.markdown("## 🏋️‍♂️ Saisie & Suivi de la Préparation Physique (Coach)")
-            
+
             with st.expander("➕ Enregistrer une séance de Prépa Physique"):
                 with st.form("form_saisie_physique"):
                     date_seance_c = st.date_input("📅 Date de la séance", value=date.today(), key="date_sc_p")
@@ -510,26 +567,26 @@ with tab_coach:
                         contenu_general_c = st.selectbox("🎯 Thème principal :", ["Musculation Haut", "Musculation Bas", "Cardio / Aérobie", "Vitesse / Explosivité", "Gainage / Abdos", "Prévention / Mobilité", "Récupération", "Mixte"], key="cg_p")
                     with col_sc2:
                         duree_finale_c = st.number_input("⏱️ Durée (minutes)", min_value=1, value=90, step=15, key="duree_p")
-                        
+
                     contenu_detaille_c = st.text_area("Contenu détaillé de la séance :", height=80, key="cont_p")
                     remarques_c = st.text_area("Remarques / Observations du coach :", height=50, key="rem_p")
-                    
+
                     note_comportement_p = st.slider("🧠 Note comportementale (1 à 10) :", min_value=1, max_value=10, value=7, key="nc_p")
 
                     valider_seance_physique = st.form_submit_button("🔥 Enregistrer la séance de Prépa Physique", use_container_width=True)
 
                 if valider_seance_physique:
                     dico_p = {
-                        'Date': str(date_seance_c), 
-                        'Type': "Prépa Physique", 
+                        'Date': str(date_seance_c),
+                        'Type': "Prépa Physique",
                         'Contenu_General': contenu_general_c,
-                        'Duree': duree_finale_c, 
-                        'RPE': 5, 
-                        'Charge': duree_finale_c * 5, 
+                        'Duree': duree_finale_c,
+                        'RPE': 5,
+                        'Charge': duree_finale_c * 5,
                         'Satisfaction': 3,
-                        'Whoop_Strain': 0.0, 
-                        'Whoop_HR_avg': 0, 
-                        'Whoop_HR_max': 0, 
+                        'Whoop_Strain': 0.0,
+                        'Whoop_HR_avg': 0,
+                        'Whoop_HR_max': 0,
                         'Whoop_Calories': 0,
                         'Contenu': contenu_detaille_c.strip(),
                         'Remarques': remarques_c.strip(),
@@ -555,7 +612,7 @@ with tab_coach:
                     st.info("Aucune séance de préparation physique enregistrée pour le moment.")
             else:
                 st.info("La base de données est vide.")
-                
+
             st.markdown("---")
             st.markdown("## 📈 Saisie & Suivi des Évaluations Physiques (Tests)")
             with st.expander("➕ Saisir un nouveau résultat de Test"):
@@ -574,10 +631,10 @@ with tab_coach:
                     resultat = st.number_input("Résultat obtenu", format="%.2f", step=0.1)
                     unite = st.text_input("Unité (ex: sec, cm, kg, palier)")
                     objectif = st.text_input("Objectif fixé pour le prochain test")
-                    
+
                 if st.button("💾 Enregistrer le résultat du Test", use_container_width=True):
                     dico_test = {
-                        'Date': str(date_test), 'Periode': periode, 'Test': nom_test, 'Cote': cote, 
+                        'Date': str(date_test), 'Periode': periode, 'Test': nom_test, 'Cote': cote,
                         'Resultat': resultat, 'Unite': unite, 'Objectif_Prochain': objectif
                     }
                     ajouter_ligne("Tests", dico_test)
@@ -599,7 +656,7 @@ with tab_coach:
         # --- SOUS-ONGLET 3 : TENNIS (LUCA) ---
         with tab_c_luca:
             st.markdown("## 🎾 Saisie & Suivi des Entraînements Tennis (Coach)")
-            
+
             with st.expander("➕ Enregistrer une séance de Tennis / Match"):
                 with st.form("form_saisie_tennis"):
                     date_tennis_c = st.date_input("📅 Date de la séance", value=date.today(), key="date_sc_t")
@@ -609,26 +666,26 @@ with tab_coach:
                         contenu_general_t = st.selectbox("🎯 Thème principal :", ["Technique", "Tactique", "Panier / Gammes", "Points dirigés", "Stratégie de Match", "Mixte"], key="cg_t")
                     with col_tc2:
                         duree_tennis_c = st.number_input("⏱️ Durée (minutes)", min_value=1, value=90, step=15, key="duree_t")
-                        
+
                     contenu_detaille_t = st.text_area("Contenu détaillé de la séance / Match :", height=80, key="cont_t")
                     remarques_t = st.text_area("Remarques / Bilan technique ou tactique :", height=50, key="rem_t")
-                    
+
                     note_comportement_t = st.slider("🧠 Note comportementale (1 à 10) :", min_value=1, max_value=10, value=7, key="nc_t")
 
                     valider_seance_tennis = st.form_submit_button("🔥 Enregistrer la séance de Tennis", use_container_width=True)
 
                 if valider_seance_tennis:
                     dico_t = {
-                        'Date': str(date_tennis_c), 
-                        'Type': type_tennis_c, 
+                        'Date': str(date_tennis_c),
+                        'Type': type_tennis_c,
                         'Contenu_General': contenu_general_t,
-                        'Duree': duree_tennis_c, 
-                        'RPE': 5, 
-                        'Charge': duree_tennis_c * 5, 
+                        'Duree': duree_tennis_c,
+                        'RPE': 5,
+                        'Charge': duree_tennis_c * 5,
                         'Satisfaction': 3,
-                        'Whoop_Strain': 0.0, 
-                        'Whoop_HR_avg': 0, 
-                        'Whoop_HR_max': 0, 
+                        'Whoop_Strain': 0.0,
+                        'Whoop_HR_avg': 0,
+                        'Whoop_HR_max': 0,
                         'Whoop_Calories': 0,
                         'Contenu': contenu_detaille_t.strip(),
                         'Remarques': remarques_t.strip(),
@@ -659,7 +716,7 @@ with tab_coach:
         with tab_c_admin:
             st.markdown("## 🚗 Registre des Frais Kilométriques (Saisie Coachs)")
             st.info("💡 Barème appliqué : 0,665 € / km. Les données s'additionnent jusqu'à ce qu'elles soient marquées comme PAYÉES.")
-            
+
             if not df_frais.empty:
                 df_frais['Distance_km'] = df_frais['Distance_km'].astype(str).str.replace(',', '.').apply(pd.to_numeric, errors='coerce').fillna(0)
                 df_frais['Montant_Euros'] = df_frais['Montant_Euros'].astype(str).str.replace(',', '.').apply(pd.to_numeric, errors='coerce').fillna(0)
@@ -682,7 +739,7 @@ with tab_coach:
                     with col_f2:
                         choix_arrivee = st.selectbox("🏁 Arrivée (Choix rapide)", options_lieux, index=0)
                         saisie_arrivee = st.text_input("Ou saisir une nouvelle arrivée :", disabled=(choix_arrivee != "--- Nouveau lieu ---"))
-                    
+
                     col_d1, col_d2, col_d3 = st.columns([1.5, 1.5, 2])
                     with col_d1:
                         distance_km = st.number_input("📏 Distance d'un aller (km)", min_value=0.0, step=1.0)
@@ -692,9 +749,9 @@ with tab_coach:
                         st.write("")
                         st.write("")
                         aller_retour = st.checkbox("🔄 Trajet Aller-Retour (Double automatiquement la distance)")
-                    
+
                     ajouter_frais = st.form_submit_button("💾 Ajouter à l'historique", use_container_width=True)
-                    
+
                 if ajouter_frais:
                     depart_final = saisie_depart if choix_depart == "--- Nouveau lieu ---" else choix_depart
                     arrivee_final = saisie_arrivee if choix_arrivee == "--- Nouveau lieu ---" else choix_arrivee
@@ -705,7 +762,7 @@ with tab_coach:
                             'Date': str(date_trajet),
                             'Depart': depart_final.strip(),
                             'Arrivee': arrivee_final.strip(),
-                            'Distance_km': f"{dist_totale:.1f}", 
+                            'Distance_km': f"{dist_totale:.1f}",
                             'Montant_Euros': f"{montant:.2f}",
                             'Statut': 'Non payé',
                             'Coach': coach_choisi
@@ -715,34 +772,68 @@ with tab_coach:
                         st.rerun()
                     else:
                         st.error("⚠️ Veuillez remplir les lieux et indiquer une distance > 0.")
-            
-            st.markdown("### 🗃️ Historique Global & Validation des Paiements")
+
+            st.markdown("### 🗃️ Historique Global (Tous les coachs)")
             if not df_frais.empty:
+                lignes_html = ""
                 for idx, row in df_frais.iterrows():
-                    statut_actuel = row.get('Statut', 'Non payé')
-                    badge_statut = "✅ Payé" if statut_actuel == 'Payé' else "⏳ En attente"
+                    badge_statut = "<span style='color: #10B981; font-weight: bold;'>✅ Payé</span>" if row['Statut'] == 'Payé' else "<span style='color: #EF4444; font-weight: bold;'>⏳ En attente</span>"
                     coach_nom = row.get('Coach', 'Romain')
-                    
-                    cols_f = st.columns([2, 3, 1.5, 1.5, 1.5, 2])
-                    cols_f[0].write(str(row['Date']))
-                    cols_f[1].write(f"{row['Depart']} ➡️ {row['Arrivee']}")
-                    cols_f[2].write(f"{row['Distance_km']} km")
-                    cols_f[3].write(f"**{coach_nom}**")
-                    cols_f[4].write(f"**{row['Montant_Euros']} €**")
-                    
-                    if statut_actuel != 'Payé':
-                        if cols_f[5].button("Marquer payé", key=f"paye_{idx}"):
-                            marquer_paye_gsheets(idx)
-                            st.success("Trajet marqué comme payé !")
+                    lignes_html += f"""<tr>
+<td style="padding: 10px; border-bottom: 1px solid #D1D5DB;">{row['Date']}</td>
+<td style="padding: 10px; border-bottom: 1px solid #D1D5DB;">{row['Depart']} ➡️ {row['Arrivee']}</td>
+<td style="padding: 10px; border-bottom: 1px solid #D1D5DB; text-align: center;">{row['Distance_km']:.1f} km</td>
+<td style="padding: 10px; border-bottom: 1px solid #D1D5DB; text-align: center;"><b>{coach_nom}</b></td>
+<td style="padding: 10px; border-bottom: 1px solid #D1D5DB; text-align: center;">{badge_statut}</td>
+<td style="padding: 10px; border-bottom: 1px solid #D1D5DB; text-align: right;"><b>{row['Montant_Euros']:.2f} €</b></td>
+</tr>"""
+
+                historique_html = f"""<div style="border: 1px solid #E5E7EB; padding: 15px; border-radius: 8px; background-color: #F9FAFB; margin-bottom: 15px;">
+<table style="width: 100%; font-size: 14px; border-collapse: collapse;">
+<thead>
+<tr style="background-color: #E5E7EB; text-transform: uppercase; font-size: 12px; color: #374151;">
+<th style="padding: 8px; text-align: left;">Date</th>
+<th style="padding: 8px; text-align: left;">Trajet</th>
+<th style="padding: 8px; text-align: center;">Distance</th>
+<th style="padding: 8px; text-align: center;">Coach</th>
+<th style="padding: 8px; text-align: center;">Statut</th>
+<th style="padding: 8px; text-align: right;">Montant</th>
+</tr>
+</thead>
+<tbody>
+{lignes_html}
+</tbody>
+</table>
+</div>"""
+                st.markdown(historique_html, unsafe_allow_html=True)
+
+                df_impayes_global = df_frais[df_frais['Statut'] != 'Payé']
+                if not df_impayes_global.empty:
+                    st.markdown("#### ✅ Valider un paiement")
+                    col_p1, col_p2 = st.columns([3, 1])
+                    with col_p1:
+                        options_paye = {
+                            idx: f"{row['Date']} | {row['Depart']} ➡️ {row['Arrivee']} ({row['Coach']}) - {row['Montant_Euros']:.2f} €"
+                            for idx, row in df_impayes_global.iterrows()
+                        }
+                        idx_a_payer = st.selectbox(
+                            "Sélectionner un trajet en attente :",
+                            options=list(options_paye.keys()),
+                            format_func=lambda x: options_paye[x],
+                            key="select_payer_frais"
+                        )
+                    with col_p2:
+                        st.write("")
+                        st.write("")
+                        if st.button("✅ Marquer payé", use_container_width=True, key="btn_payer_frais"):
+                            marquer_paye_gsheets(idx_a_payer)
+                            st.success("Trajet marqué comme Payé !")
                             st.rerun()
-                    else:
-                        cols_f[5].write("✅ Payé")
-                
-                st.markdown("---")
+
                 st.markdown("### 📨 Édition de la Note de Frais par Coach")
                 choix_facture_coach = st.radio("Sélectionnez le coach pour qui générer la facture :", ["Romain", "Luca"], horizontal=True)
                 df_impayes_coach = df_frais[(df_frais['Statut'] != 'Payé') & (df_frais['Coach'] == choix_facture_coach)]
-                
+
                 if not df_impayes_coach.empty:
                     total_restant_coach = df_impayes_coach['Montant_Euros'].sum()
                     if st.button(f"📄 Générer la note de frais de {choix_facture_coach}", use_container_width=True):
@@ -751,8 +842,8 @@ with tab_coach:
                             lignes_impayes_html += f"""<tr>
 <td style="padding: 10px; border-bottom: 1px solid #E5E7EB;">{row['Date']}</td>
 <td style="padding: 10px; border-bottom: 1px solid #E5E7EB;">{row['Depart']} ➡️ {row['Arrivee']}</td>
-<td style="padding: 10px; border-bottom: 1px solid #E5E7EB; text-align: center;">{row['Distance_km']} km</td>
-<td style="padding: 10px; border-bottom: 1px solid #E5E7EB; text-align: right;"><b>{row['Montant_Euros']} €</b></td>
+<td style="padding: 10px; border-bottom: 1px solid #E5E7EB; text-align: center;">{row['Distance_km']:.1f} km</td>
+<td style="padding: 10px; border-bottom: 1px solid #E5E7EB; text-align: right;"><b>{row['Montant_Euros']:.2f} €</b></td>
 </tr>"""
 
                         facture_parents = f"""<div style="border: 2px solid #1E3A8A; padding: 30px; border-radius: 10px; background-color: #FFFFFF; margin-top: 15px; box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);">
@@ -786,7 +877,7 @@ with tab_coach:
 
             st.markdown("---")
             st.subheader("🌅 Base de données : Gestion & Suppression")
-            
+
             st.markdown("**Forme (Matin)**")
             if not df_forme.empty:
                 st.dataframe(df_forme, use_container_width=True)
