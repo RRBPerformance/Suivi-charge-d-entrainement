@@ -42,14 +42,12 @@ def charger_donnees():
                 if len(data) > 1:
                     en_tetes = data[0]
                     lignes = data[1:]
-                    # Normalise la longueur de chaque ligne par rapport aux en-têtes
                     nb_cols = len(en_tetes)
                     lignes_norm = [
                         (l + [""] * (nb_cols - len(l)))[:nb_cols]
                         for l in lignes
                     ]
                     df = pd.DataFrame(lignes_norm, columns=en_tetes)
-                    # Garde les colonnes non vides ou nommées
                     cols_a_garder = [c if c.strip() != "" else f"Col_{i}" for i, c in enumerate(en_tetes)]
                     df.columns = cols_a_garder
                     return df
@@ -61,7 +59,7 @@ def charger_donnees():
         df_forme = ws_to_df("Forme", [
             'Date', 'Qualité du sommeil', 'Niveau de fraicheur', 'Niveau de stress',
             'Humeur', 'Score_Forme', 'Où', 'Quel est le type de douleur ?',
-            'Whoop_Recup', 'Whoop_Sommeil', 'Whoop_VFC'
+            'Whoop_Sommeil', 'Whoop_VFC', 'Whoop_FCMin', 'Whoop_Recup'
         ])
         df_seances = ws_to_df("Seances", ['Date', 'Type', 'Contenu_General', 'Duree', 'RPE', 'Charge', 'Satisfaction', 'Contenu', 'Remarques', 'Note_Comportement'])
         df_soir = ws_to_df("Soir", ['Date', 'Etat_Jour', 'Zones_Douleur_Soir', 'Type_Douleur'])
@@ -79,7 +77,7 @@ def charger_donnees():
         df_forme = pd.DataFrame(columns=[
             'Date', 'Qualité du sommeil', 'Niveau de fraicheur', 'Niveau de stress',
             'Humeur', 'Score_Forme', 'Où', 'Quel est le type de douleur ?',
-            'Whoop_Recup', 'Whoop_Sommeil', 'Whoop_VFC'
+            'Whoop_Sommeil', 'Whoop_VFC', 'Whoop_FCMin', 'Whoop_Recup'
         ])
         df_seances = pd.DataFrame(columns=['Date', 'Type', 'Contenu_General', 'Duree', 'RPE', 'Charge', 'Satisfaction', 'Contenu', 'Remarques', 'Note_Comportement'])
         df_soir = pd.DataFrame(columns=['Date', 'Etat_Jour', 'Zones_Douleur_Soir', 'Type_Douleur'])
@@ -128,6 +126,8 @@ def ajouter_ligne(onglet_nom, dico_donnees):
                         "Whoop_Score": "Whoop_Recup",
                         "Whoop_Sommeil": "Whoop_Sommeil",
                         "Whoop_VFC": "Whoop_VFC",
+                        "Whoop_FCMin": "Whoop_FC",
+                        "Whoop_FC": "Whoop_FCMin",
                     }
                     cle_alt = alias_forme.get(h_clean)
                     if cle_alt and cle_alt in dico_donnees:
@@ -200,7 +200,7 @@ with tab_matin:
         whoop_sommeil = st.number_input("💤 Performance Sommeil (%)", min_value=0, max_value=100, value=0)
     with col_w2:
         whoop_vfc = st.number_input("💓 VFC (Variabilité en ms)", min_value=0, value=0)
-        whoop_fc = st.number_input("🫀 FC Repos (bpm)", min_value=0, value=0)
+        whoop_fc = st.number_input("🫀 FC Repos / Min (bpm)", min_value=0, value=0)
 
     st.markdown("---")
     st.markdown("### 🧠 2. Ton Ressenti (Subjectif)")
@@ -233,10 +233,10 @@ with tab_matin:
             'Score_Forme': score_forme,
             'Où': zones_str,
             'Quel est le type de douleur ?': type_douleur,
-            'Whoop_Recup': whoop_recup,
             'Whoop_Sommeil': whoop_sommeil,
             'Whoop_VFC': whoop_vfc,
-            # Alias conservés au cas où
+            'Whoop_FCMin': whoop_fc,
+            'Whoop_Recup': whoop_recup,
             'Sommeil': sommeil,
             'Fatigue': fatigue,
             'Stress': stress,
@@ -533,11 +533,12 @@ with tab_coach:
                         whoop_rec_v = row.get('Whoop_Recup', row.get('Whoop_Score', 0))
                         whoop_som_v = row.get('Whoop_Sommeil', 0)
                         whoop_vfc_v = row.get('Whoop_VFC', 0)
+                        whoop_fc_v = row.get('Whoop_FCMin', row.get('Whoop_FC', 0))
 
                         with st.expander(f"📅 {row['Date']} - Score Forme : {score_v}/20"):
                             st.markdown(f"**Sommeil :** {sommeil_v} | **Fraîcheur :** {fatigue_v} | **Stress :** {stress_v} | **Humeur :** {humeur_v}")
                             st.markdown(f"**Douleur / Gêne :** {douleur_v} ({zones_v})")
-                            st.markdown(f"**Whoop :** Récup : {whoop_rec_v}% | Sommeil : {whoop_som_v}% | VFC : {whoop_vfc_v}ms")
+                            st.markdown(f"**Whoop :** Récup : {whoop_rec_v}% | Sommeil : {whoop_som_v}% | VFC : {whoop_vfc_v}ms | FC Min : {whoop_fc_v}bpm")
                 else:
                     st.info("Aucun check-in matinal enregistré.")
 
